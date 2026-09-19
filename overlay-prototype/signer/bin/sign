@@ -1,0 +1,22 @@
+#!/bin/sh
+# Ad-hoc codesign every product with a stable identifier, so the keychain sees the
+# same code identity across rebuilds. No Developer ID and no full Xcode required.
+set -eu
+here=$(cd "$(dirname "$0")/.." && pwd)
+config=${1:-release}
+# One identifier for every product, deliberately. The legacy keychain binds an
+# item's ACL to the code identity that created it, so signing each binary under a
+# different identifier makes the key created by export-pubkey raise a blocking,
+# often invisible authorization dialog when signature-harness tries to use it.
+# These are entry points of one signer, so they share one identity.
+IDENTIFIER=local.intent.signer
+for product in grant-signer grant-check; do
+    binary="$here/.build/$config/$product"
+    [ -f "$binary" ] || { echo "missing $binary (run: swift build -c $config)" >&2; exit 1; }
+    codesign --force --sign - \
+             --identifier "$IDENTIFIER" \
+             --entitlements "$here/Resources/signer.entitlements" \
+             "$binary"
+    codesign --verify --strict "$binary"
+    echo "signed $product"
+done

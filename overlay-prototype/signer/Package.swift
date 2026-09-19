@@ -12,6 +12,7 @@ let package = Package(
     products: [
         .library(name: "GrantCore", targets: ["GrantCore"]),
         .executable(name: "grant-check", targets: ["GrantCheck"]),
+        .executable(name: "grant-signer", targets: ["GrantSigner"]),
     ],
     targets: [
         // Swift 5 language mode on purpose: Swift 6 strict concurrency generates a
@@ -19,6 +20,11 @@ let package = Package(
         // NWListener callbacks. That state is confined to one serial queue here,
         // so the errors would be noise, not bugs.
         .target(name: "GrantCore", swiftSettings: [.swiftLanguageMode(.v5)]),
+        .executableTarget(
+            name: "GrantSigner",
+            dependencies: ["GrantCore"],
+            swiftSettings: [.swiftLanguageMode(.v5)]
+        ),
         .executableTarget(
             name: "GrantCheck",
             dependencies: ["GrantCore"],

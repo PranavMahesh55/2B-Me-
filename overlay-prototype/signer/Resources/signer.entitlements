@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <!-- Deliberately minimal. Do NOT add keychain-access-groups: with `codesign -s -`
+       there is no team prefix to validate the group against, and the kernel
+       SIGKILLs the process on launch (verified: exit 137 on macOS 26.4). The
+       Enclave key lives in the legacy keychain instead; see EnclaveKeyManager. -->
+  <key>com.apple.security.app-sandbox</key><false/>
+</dict>
+</plist>

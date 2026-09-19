@@ -1,0 +1,12 @@
+{
+  "name": "@2bme/broker",
+  "private": true,
+  "type": "module",
+  "description": "Grant broker. Separate PID from the signer by design: if the signing key and the connector credentials share an address space, the security claim collapses (techspecsigner.md §1).",
+  "engines": { "node": ">=22.18.0" },
+  "scripts": {
+    "start": "node bin/serve.ts",
+    "test": "node --test test/",
+    "verify-chain": "node bin/verify-chain.ts"
+  }
+}

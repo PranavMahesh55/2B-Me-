@@ -1,0 +1,5 @@
+#!/bin/sh
+# §5: writes SPKI DER base64url to stdout. The broker reads it from config.
+set -eu
+here=$(cd "$(dirname "$0")/.." && pwd)
+exec "$here/.build/release/grant-signer" export-pubkey "$@"
