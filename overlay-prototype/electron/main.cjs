@@ -1,7 +1,12 @@
 const { app, BrowserWindow, ipcMain, screen } = require("electron");
+const { spawn } = require("node:child_process");
+const fs = require("node:fs");
 const path = require("node:path");
 
 let mainWindow;
+let backendProcess;
+const projectRoot = path.join(__dirname, "..");
+const backendUrl = "http://127.0.0.1:8765";
 
 const WINDOW_SIZES = {
   expanded: { width: 588, height: 682 },
@@ -59,7 +64,45 @@ function createWindow() {
   }
 
   mainWindow.once("ready-to-show", () => mainWindow.showInactive());
+  mainWindow.on("focus", () => mainWindow?.webContents.send("desktop:window-focus", true));
+  mainWindow.on("blur", () => mainWindow?.webContents.send("desktop:window-focus", false));
   mainWindow.on("closed", () => { mainWindow = undefined; });
+}
+
+async function backendReady() {
+  try {
+    const response = await fetch(`${backendUrl}/api/system/status`);
+    return response.ok;
+  } catch {
+    return false;
+  }
+}
+
+async function startBackend() {
+  if (await backendReady()) return;
+  const virtualPython = process.platform === "win32"
+    ? path.join(projectRoot, ".venv", "Scripts", "python.exe")
+    : path.join(projectRoot, ".venv", "bin", "python");
+  const python = process.env.BEHAVIOR_PYTHON || (fs.existsSync(virtualPython) ? virtualPython : "python3");
+  backendProcess = spawn(
+    python,
+    ["-m", "uvicorn", "backend.app.main:app", "--host", "127.0.0.1", "--port", "8765"],
+    {
+      cwd: projectRoot,
+      env: {
+        ...process.env,
+        BEHAVIOR_DATA_MODE: process.env.BEHAVIOR_DATA_MODE || "synthetic",
+        BEHAVIOR_MODEL_PATH: process.env.BEHAVIOR_MODEL_PATH || path.join(projectRoot, "config", "behavior_model_v0.synthetic.json"),
+      },
+      stdio: process.env.NODE_ENV === "development" ? "inherit" : "ignore",
+    },
+  );
+
+  for (let attempt = 0; attempt < 60; attempt += 1) {
+    if (await backendReady()) return;
+    await new Promise((resolve) => setTimeout(resolve, 100));
+  }
+  throw new Error("2Bme local intelligence service did not become ready");
 }
 
 ipcMain.handle("window:set-mode", (_event, mode) => {
@@ -80,12 +123,17 @@ ipcMain.handle("window:minimize", () => {
   return true;
 });
 
-app.whenReady().then(() => {
+app.whenReady().then(async () => {
+  await startBackend();
   createWindow();
   app.on("activate", () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
     else mainWindow?.show();
   });
+});
+
+app.on("before-quit", () => {
+  if (backendProcess && !backendProcess.killed) backendProcess.kill("SIGTERM");
 });
 
 app.on("window-all-closed", () => {
