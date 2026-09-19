@@ -158,7 +158,14 @@ for (const testCase of CASES) {
     name: testCase.name,
     description: testCase.description,
     value: testCase.value,
+    // The raw JSON text the Swift port parses. Kept separate from `value` so the
+    // input crosses the language boundary as bytes rather than as a re-encoded tree.
+    input_json: JSON.stringify(testCase.value),
     canonical,
+    // Authoritative. `canonical` is for human eyes: it passes through the vector
+    // file's own JSON escaping layer, which is an easy place to gain or lose a
+    // backslash. Hex has no such layer.
+    canonical_utf8_hex: Buffer.from(canonical, "utf8").toString("hex"),
     canonical_utf8_length: Buffer.byteLength(canonical, "utf8"),
     sha256_base64url: await canonicalHash(testCase.value),
   });
