@@ -31,6 +31,30 @@ def _token(event: RawEvent) -> str:
     return f"APP:{application}|ACTION:{action}"
 
 
+def _workflow_tokens(events: list[RawEvent]) -> list[str]:
+    eligible_types = {
+        "application_transition",
+        "navigation",
+        "click",
+        "keyboard_activity",
+        "correction",
+        "clipboard_action",
+        "automation_action",
+    }
+    ignored_apps = {"2BME", "ELECTRON"}
+    result: list[str] = []
+    for event in events:
+        if event.event_type not in eligible_types:
+            continue
+        application = (event.application or "UNKNOWN").upper().replace(" ", "_")
+        if application in ignored_apps:
+            continue
+        token = _token(event)
+        if not result or result[-1] != token:
+            result.append(token)
+    return result
+
+
 def extract_features(
     events: list[RawEvent],
     *,
@@ -54,6 +78,7 @@ def extract_features(
             "completion_success": False,
             "sustained_active_ratio": 1.0,
             "tokens": [],
+            "workflow_tokens": [],
         }
 
     ordered = sorted(events, key=lambda item: item.timestamp)
@@ -79,6 +104,7 @@ def extract_features(
     )
 
     tokens = [_token(event) for event in ordered]
+    workflow_tokens = _workflow_tokens(ordered)
     token_counts = Counter(tokens)
     repeated_actions = sum(count for count in token_counts.values() if count > 1)
     relevant_actions = sum(
@@ -130,5 +156,5 @@ def extract_features(
         "completion_success": completion_success,
         "sustained_active_ratio": round(max(0.0, 1.0 - idle_ms / elapsed_ms), 4),
         "tokens": tokens,
+        "workflow_tokens": workflow_tokens,
     }
-

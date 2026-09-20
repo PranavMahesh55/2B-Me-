@@ -60,7 +60,10 @@ def create_recommendation_if_warranted(
         .order_by(desc(Recommendation.created_at))
     )
     now = datetime.now(UTC)
-    if existing and (not existing.cooldown_until or existing.cooldown_until > now):
+    existing_cooldown = existing.cooldown_until if existing else None
+    if existing_cooldown and existing_cooldown.tzinfo is None:
+        existing_cooldown = existing_cooldown.replace(tzinfo=UTC)
+    if existing and (not existing_cooldown or existing_cooldown > now):
         return existing
 
     recurrence = min(1.0, float(evidence.get("workflow_repeat_count", 0)) / 10)
@@ -96,4 +99,3 @@ def create_recommendation_if_warranted(
         payload={"recommendation_id": item.id, "class": recommendation_class},
     )
     return item
-

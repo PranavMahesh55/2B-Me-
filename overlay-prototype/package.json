@@ -28,7 +28,7 @@
     "react": "19.2.0",
     "react-dom": "19.2.0",
     "recharts": "^3.10.1",
-    "vite": "6.4.2"
+    "vite": "^6.4.3"
   },
   "devDependencies": {
     "concurrently": "^10.0.3",

@@ -17,7 +17,8 @@ from backend.app.synthetic.loader import seed_bootstrap_data
 
 DEFAULT_PRIVACY = {
     "application_activity": True,
-    "window_titles": True,
+    "window_switching": True,
+    "window_titles": False,
     "browser_context": True,
     "keyboard_timing": True,
     "clipboard_metadata": False,
@@ -65,9 +66,9 @@ app = FastAPI(
 )
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=["http://127.0.0.1:4173", "http://localhost:4173", "null"],
     allow_credentials=False,
-    allow_methods=["GET", "POST", "PUT", "OPTIONS"],
+    allow_methods=["GET", "POST", "PUT", "PATCH", "OPTIONS"],
     allow_headers=["Content-Type"],
 )
 
@@ -85,4 +86,3 @@ app.include_router(websocket.router)
 @app.get("/")
 def root() -> dict:
     return {"service": "2Bme local intelligence", "status": runtime.status, "docs": "/docs"}
-

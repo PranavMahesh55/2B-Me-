@@ -1,3 +1,11 @@
+node_modules/
+.venv/
+dist/
+backend/data/*.db
+backend/data/*.db-*
+__pycache__/
+.pytest_cache/
+.DS_Store
 
 # Swift build products
 signer/.build/

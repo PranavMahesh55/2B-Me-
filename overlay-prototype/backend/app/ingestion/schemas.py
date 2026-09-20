@@ -67,6 +67,22 @@ class SessionStop(BaseModel):
     reason: str = Field(default="manual_stop", max_length=80)
 
 
+class WorkflowStepInput(BaseModel):
+    application: str = Field(min_length=1, max_length=160)
+    action: str = Field(min_length=1, max_length=160)
+
+
+class WorkflowCreate(BaseModel):
+    name: str = Field(min_length=2, max_length=160)
+    workflow_type: str = Field(default="custom", max_length=80)
+    steps: list[WorkflowStepInput] = Field(min_length=2, max_length=20)
+
+
+class WorkflowUpdate(BaseModel):
+    name: str = Field(min_length=2, max_length=160)
+    steps: list[WorkflowStepInput] = Field(min_length=2, max_length=20)
+
+
 class FeedbackInput(BaseModel):
     feedback: Literal["accepted", "dismissed", "not_useful", "wrong_interpretation", "do_not_suggest_again"]
     reason: str | None = Field(default=None, max_length=240)
@@ -101,4 +117,3 @@ class ExecuteInput(BaseModel):
 
 class PrivacyUpdate(BaseModel):
     enabled: bool
-

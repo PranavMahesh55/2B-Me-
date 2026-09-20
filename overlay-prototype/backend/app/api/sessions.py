@@ -15,11 +15,12 @@ router = APIRouter(prefix="/api/sessions", tags=["sessions"])
 
 
 def serialize_session(item: BehaviorSession, event_count: int = 0) -> dict:
-    duration = ((item.ended_at or datetime.now(UTC)) - _aware(item.started_at)).total_seconds()
+    duration = (_aware(item.ended_at or datetime.now(UTC)) - _aware(item.started_at)).total_seconds()
     return {
         "id": item.id,
         "title": item.title,
         "workflow_type": item.workflow_type,
+        "device_id": item.device_id,
         "status": item.status,
         "started_at": item.started_at.isoformat(),
         "ended_at": item.ended_at.isoformat() if item.ended_at else None,
@@ -35,11 +36,32 @@ def _aware(value: datetime) -> datetime:
 
 @router.post("/start")
 def start_session(body: SessionStart, db: Session = Depends(get_db)) -> dict:
+    started_at = datetime.now(UTC)
+    stale_sessions = db.scalars(
+        select(BehaviorSession).where(
+            BehaviorSession.device_id == body.device_id,
+            BehaviorSession.status == "active",
+        )
+    ).all()
+    for stale_session in stale_sessions:
+        stale_session.status = "completed"
+        stale_session.ended_at = started_at
+        for task in db.scalars(select(Task).where(Task.session_id == stale_session.id)).all():
+            if not task.ended_at:
+                task.ended_at = started_at
+        record_audit(
+            db,
+            "session_superseded",
+            session_id=stale_session.id,
+            payload={"reason": "new_device_session"},
+        )
+
     behavior_session = BehaviorSession(
         title=body.title,
         workflow_type=body.workflow_type,
         device_id=body.device_id,
         status="active",
+        started_at=started_at,
         data_origin="live_observed",
     )
     db.add(behavior_session)
@@ -87,6 +109,32 @@ def list_sessions(limit: int = 30, db: Session = Depends(get_db)) -> list[dict]:
     ]
 
 
+@router.get("/active")
+def get_active_session(
+    device_id: str = "device_local",
+    workflow_type: str | None = None,
+    db: Session = Depends(get_db),
+) -> dict:
+    query = select(BehaviorSession).where(
+        BehaviorSession.status == "active",
+        BehaviorSession.device_id == device_id,
+    )
+    if workflow_type:
+        query = query.where(BehaviorSession.workflow_type == workflow_type)
+    item = db.scalar(query.order_by(desc(BehaviorSession.started_at)))
+    if not item:
+        raise HTTPException(status_code=404, detail="No active session found")
+    task = db.scalar(
+        select(Task)
+        .where(Task.session_id == item.id)
+        .order_by(desc(Task.started_at))
+    )
+    return {
+        **serialize_session(item),
+        "task_id": task.id if task else None,
+    }
+
+
 @router.get("/{session_id}")
 def get_session(session_id: str, db: Session = Depends(get_db)) -> dict:
     item = db.get(BehaviorSession, session_id)
@@ -113,4 +161,3 @@ def get_session(session_id: str, db: Session = Depends(get_db)) -> dict:
         for score in scores
     ]
     return payload
-

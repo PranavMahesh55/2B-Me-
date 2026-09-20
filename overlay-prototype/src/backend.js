@@ -77,19 +77,23 @@ class BehaviorBackendClient {
     this.started = true;
     try {
       const status = await request("/api/system/status");
-      const stored = window.sessionStorage.getItem("2bme-live-session");
-      let activeSession = stored ? JSON.parse(stored) : null;
+      let activeSession = await window.desktopAPI?.getSession?.();
+      if (!activeSession?.id) {
+        activeSession = await request(
+          "/api/sessions/active?device_id=device_local&workflow_type=deep_work",
+        ).catch(() => null);
+      }
       if (!activeSession?.id) {
         activeSession = await request("/api/sessions/start", {
           method: "POST",
           body: JSON.stringify({
-            title: "Researching authentication documentation",
-            workflow_type: "research_browsing",
+            title: "Desktop work session",
+            workflow_type: "deep_work",
             device_id: "device_local",
           }),
         });
-        window.sessionStorage.setItem("2bme-live-session", JSON.stringify(activeSession));
       }
+      window.sessionStorage.removeItem("2bme-live-session");
       this.update({
         connected: true,
         status: status.status,
@@ -99,17 +103,21 @@ class BehaviorBackendClient {
       });
       this.openSocket();
       await this.refreshAll();
-      this.track("task_marker", "start", {
-        application: "2Bme",
-        windowContext: "desktop_overlay",
-      });
+      if (window.desktopAPI) {
+        this.track("task_marker", "start", {
+          application: "2Bme",
+          windowContext: "desktop_overlay",
+        });
+      }
       this.flushTimer = window.setInterval(() => this.flush(), 750);
-      window.addEventListener("focus", this.handleFocus);
-      window.addEventListener("blur", this.handleBlur);
-      document.addEventListener("visibilitychange", this.handleVisibility);
-      this.removeDesktopFocusListener = window.desktopAPI?.onWindowFocus?.((focused) => {
-        this.track("window_focus", focused ? "focus" : "blur", { application: "2Bme" });
-      });
+      if (window.desktopAPI) {
+        window.addEventListener("focus", this.handleFocus);
+        window.addEventListener("blur", this.handleBlur);
+        document.addEventListener("visibilitychange", this.handleVisibility);
+        this.removeDesktopFocusListener = window.desktopAPI.onWindowFocus?.((focused) => {
+          this.track("window_focus", focused ? "focus" : "blur", { application: "2Bme" });
+        });
+      }
     } catch (error) {
       this.update({ connected: false, status: "OFFLINE", lastError: error.message });
       this.started = false;
@@ -123,9 +131,15 @@ class BehaviorBackendClient {
   handleVisibility = () => this.track("window_focus", document.visibilityState, { application: "2Bme" });
 
   async refreshAll() {
+    const sessionQuery = this.state.sessionId
+      ? `?session_id=${encodeURIComponent(this.state.sessionId)}`
+      : "";
+    const historyQuery = this.state.sessionId
+      ? `?limit=60&session_id=${encodeURIComponent(this.state.sessionId)}`
+      : "?limit=60";
     const [metrics, metricHistory, sessions, workflows, recommendations, privacy] = await Promise.all([
-      request("/api/metrics/current"),
-      request("/api/metrics/history?limit=60"),
+      request(`/api/metrics/current${sessionQuery}`),
+      request(`/api/metrics/history${historyQuery}`),
       request("/api/sessions?limit=30"),
       request("/api/workflows"),
       request("/api/recommendations"),
@@ -141,6 +155,7 @@ class BehaviorBackendClient {
     this.socket.addEventListener("message", (event) => {
       const message = JSON.parse(event.data);
       if (message.type === "behavior_update") {
+        if (message.payload.session_id !== this.state.sessionId) return;
         this.update({ metrics: message.payload, status: "COLLECTING" });
         this.refreshLists();
       } else if (message.type === "system_status") {
@@ -174,8 +189,11 @@ class BehaviorBackendClient {
 
   async refreshLists() {
     try {
+      const historyQuery = this.state.sessionId
+        ? `?limit=60&session_id=${encodeURIComponent(this.state.sessionId)}`
+        : "?limit=60";
       const [metricHistory, sessions, workflows, recommendations] = await Promise.all([
-        request("/api/metrics/history?limit=60"),
+        request(`/api/metrics/history${historyQuery}`),
         request("/api/sessions?limit=30"),
         request("/api/workflows"),
         request("/api/recommendations"),
@@ -282,6 +300,26 @@ class BehaviorBackendClient {
   dismissIntent() {
     this.update({ pendingIntent: null, grantError: null, authorizing: false });
   }
+
+  async createWorkflow(name, steps) {
+    return request("/api/workflows", {
+      method: "POST",
+      body: JSON.stringify({ name, workflow_type: "custom", steps }),
+    });
+  }
+
+  async updateWorkflow(workflowId, name, steps) {
+    return request(`/api/workflows/${workflowId}`, {
+      method: "PATCH",
+      body: JSON.stringify({ name, steps }),
+    });
+  }
+
+  // approveAutomation() and a token-less executeAutomation() were removed in the
+  // merge rather than kept. /approve no longer exists -- it recorded an approval
+  // boolean this process set for itself -- and /execute now requires a signed
+  // grant. authorizeAndExecute() above is the replacement: it raises Touch ID,
+  // gets an Enclave signature, and lets the broker verify before anything runs.
 
   async sendFeedback(recommendationId, feedback, reason = null) {
     const result = await request(`/api/recommendations/${recommendationId}/feedback`, {

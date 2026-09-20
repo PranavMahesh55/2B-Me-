@@ -44,6 +44,8 @@ def _sanitized_metadata(metadata: dict) -> dict:
 
 
 def ingest_events(db: Session, incoming: list[NormalizedEvent]) -> dict:
+    if runtime.status == "PAUSED":
+        return {"accepted": 0, "ignored": len(incoming), "status": "PAUSED", "has_live_data": False}
     privacy = _privacy(db)
     event_ids = [item.event_id for item in incoming]
     existing_ids = set(
@@ -80,7 +82,11 @@ def ingest_events(db: Session, incoming: list[NormalizedEvent]) -> dict:
         window_context = event.window_context
         if not privacy.get("window_titles", True):
             window_context = None
+        if event.event_type == "navigation" and not privacy.get("browser_context", True):
+            window_context = None
         if event.event_type == "clipboard_action" and not privacy.get("clipboard_metadata", False):
+            continue
+        if event.event_type == "application_transition" and not privacy.get("window_switching", True):
             continue
 
         db.add(
@@ -136,7 +142,11 @@ def ingest_events(db: Session, incoming: list[NormalizedEvent]) -> dict:
                 session_id=session_id,
                 task_id=task_id,
                 window_type="whole_task",
-                features={key: value for key, value in features.items() if key != "tokens"},
+                features={
+                    key: value
+                    for key, value in features.items()
+                    if key not in {"tokens", "workflow_tokens"}
+                },
                 data_origin=behavior_session.data_origin,
                 model_version=runtime.model_config.version,
             )

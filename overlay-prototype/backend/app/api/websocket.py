@@ -35,6 +35,11 @@ manager = ConnectionManager()
 
 @router.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket) -> None:
+    origin = websocket.headers.get("origin")
+    allowed_origins = {None, "null", "file://", "http://127.0.0.1:4173", "http://localhost:4173"}
+    if origin not in allowed_origins:
+        await websocket.close(code=1008)
+        return
     await manager.connect(websocket)
     await websocket.send_json(
         {
@@ -47,4 +52,3 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
             await websocket.receive_text()
     except WebSocketDisconnect:
         manager.disconnect(websocket)
-

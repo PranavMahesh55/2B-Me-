@@ -1,6 +1,8 @@
 from backend.app.config.settings import ModelConfig, settings
 from backend.app.scoring.engine import ScoringEngine
 from backend.app.synthetic.loader import load_synthetic_baselines
+from backend.app.llm.privacy import ContextSanitizer
+from backend.app.workflows.detector import _candidate
 
 
 def test_synthetic_loader_preserves_expected_shape():
@@ -58,3 +60,38 @@ def test_configured_scores_are_bounded():
     assert 0 <= score.automation_potential <= 1
     assert 0 <= score.confidence <= 0.99
 
+
+def test_llm_context_excludes_raw_content_and_identifiers():
+    sanitized = ContextSanitizer().sanitize(
+        {"name": "Customer lookup", "repeat_count": 8, "average_duration_s": 92, "customer_email": "private@example.com"},
+        {
+            "friction": 0.61,
+            "focus": 0.55,
+            "automation_potential": 0.78,
+            "confidence": 0.88,
+            "evidence": {
+                "app_switches_per_min": 4.2,
+                "workflow_repeat_count": 8,
+                "clipboard_contents": "secret",
+            },
+        },
+    ).model_dump()
+    rendered = str(sanitized)
+    assert "private@example.com" not in rendered
+    assert "secret" not in rendered
+    assert sanitized["evidence"]["workflow_repeat_count"] == 8
+
+
+def test_workflow_candidate_rejects_passive_repetition_and_counts_non_overlapping_traces():
+    passive = ["APP:CHATGPT|ACTION:ACTIVE"] * 12
+    assert _candidate(passive) is None
+
+    trace = [
+        "APP:CHROME|ACTION:OPEN_DOCS",
+        "APP:CODE|ACTION:EDIT_FILE",
+        "APP:TERMINAL|ACTION:RUN_TEST",
+    ]
+    candidate = _candidate(trace * 3)
+    assert candidate is not None
+    assert candidate[0] == tuple(trace)
+    assert candidate[1] == 3

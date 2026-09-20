@@ -380,7 +380,7 @@ export function Overlay({ expanded, onExpandedChange, onOpenDashboard, onHide, b
                 <span className="eyebrow">60-minute rhythm</span>
                 <strong>{activityTitle}</strong>
               </div>
-              <span className="session-meta"><Clock /> Chrome + VS Code</span>
+              <span className="session-meta"><Clock /> Local event stream</span>
             </div>
             <div className="rhythm-chart" aria-label="Focus rhythm over the last 60 minutes">
               <ResponsiveContainer width="100%" height="100%">

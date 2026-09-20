@@ -20,7 +20,10 @@ import {
   ShieldCheck,
   Sparkle,
   SquaresFour,
+  Plus,
+  Trash,
   WarningCircle,
+  X,
 } from "@phosphor-icons/react";
 import { Brand } from "./Overlay.jsx";
 import { trackingSources } from "./data.js";
@@ -36,11 +39,11 @@ const navigation = [
 
 const privacyKeys = {
   "Application activity": "application_activity",
-  "Window switching": "window_titles",
+  "Window switching": "window_switching",
+  "Window titles": "window_titles",
   "Browser tab activity": "browser_context",
   "Keyboard timing": "keyboard_timing",
   "Clipboard events": "clipboard_metadata",
-  "Terminal activity": "terminal_activity",
   "Screen content": "visual_interpretation",
   "AI analysis": "ai_analysis",
 };
@@ -50,7 +53,167 @@ function durationLabel(seconds = 0) {
   const hours = Math.floor(safe / 3600);
   const minutes = Math.floor((safe % 3600) / 60);
   if (hours) return `${hours}h ${minutes}m`;
+  if (!minutes) return `${safe}s`;
   return `${minutes}m`;
+}
+
+function friendlyAction(action = "") {
+  return action.replaceAll("_", " ").replace(/^./, (letter) => letter.toUpperCase());
+}
+
+function WorkflowBuilder({ workflow, backend, onClose }) {
+  const [stage, setStage] = useState("review");
+  const [name, setName] = useState(workflow?.name || "My workflow");
+  const [steps, setSteps] = useState(
+    workflow?.steps?.length
+      ? workflow.steps.map((step) => ({ ...step }))
+      : [{ application: "", action: "" }, { application: "", action: "" }],
+  );
+  const [savedWorkflow, setSavedWorkflow] = useState(workflow || null);
+  const [plan, setPlan] = useState(null);
+  const [approvedPermissions, setApprovedPermissions] = useState([]);
+  const [result, setResult] = useState(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+
+  const isValid = name.trim().length >= 2
+    && steps.length >= 2
+    && steps.every((step) => step.application.trim() && step.action.trim());
+
+  function updateStep(index, key, value) {
+    setSteps((items) => items.map((item, itemIndex) => (
+      itemIndex === index ? { ...item, [key]: value } : item
+    )));
+  }
+
+  async function preparePlan() {
+    if (!isValid) return;
+    setBusy(true);
+    setError("");
+    try {
+      const cleanedSteps = steps.map((step) => ({
+        application: step.application.trim(),
+        action: step.action.trim().toLowerCase().replaceAll(" ", "_"),
+      }));
+      const saved = savedWorkflow?.id
+        ? await backend.client.updateWorkflow(savedWorkflow.id, name.trim(), cleanedSteps)
+        : await backend.client.createWorkflow(name.trim(), cleanedSteps);
+      const nextPlan = await backend.client.createAutomation(saved.id);
+      setSavedWorkflow(saved);
+      setPlan(nextPlan);
+      setApprovedPermissions(nextPlan.required_permissions);
+      setStage("permissions");
+      await backend.client.refreshAll();
+    } catch (caught) {
+      setError(caught.message || "The workflow could not be prepared.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  function togglePermission(permission) {
+    setApprovedPermissions((items) => (
+      items.includes(permission)
+        ? items.filter((item) => item !== permission)
+        : [...items, permission]
+    ));
+  }
+
+  async function runPreview() {
+    if (!plan || approvedPermissions.length !== plan.required_permissions.length) return;
+    setBusy(true);
+    setError("");
+    try {
+      // preparePlan() already broadcast permission_request, so the overlay's
+      // consent card is showing the same pending grant. This routes through it:
+      // Touch ID, a Secure Enclave signature, then the broker verifies before
+      // anything runs. Ticking the boxes above is an acknowledgement, not the
+      // authorization -- that was the unattested boolean this replaced.
+      const preview = await backend.client.authorizeAndExecute(plan.id);
+      setResult(preview);
+      setStage("test");
+    } catch (caught) {
+      setError(caught.message || "The preview could not run.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="workflow-builder-backdrop" role="presentation">
+      <section className="workflow-builder" role="dialog" aria-modal="true" aria-labelledby="workflow-builder-title">
+        <header className="workflow-builder__header">
+          <div>
+            <span className="section-label">Create workflow</span>
+            <h2 id="workflow-builder-title">Turn observed work into a safe preview</h2>
+          </div>
+          <button type="button" onClick={onClose} aria-label="Close workflow builder"><X /></button>
+        </header>
+
+        <div className="workflow-builder__progress" aria-label="Workflow creation progress">
+          {["review", "permissions", "test"].map((item, index) => (
+            <div className={stage === item ? "is-current" : (["review", "permissions", "test"].indexOf(stage) > index ? "is-complete" : "")} key={item}>
+              <span>{index + 1}</span>{friendlyAction(item)}
+            </div>
+          ))}
+        </div>
+
+        {stage === "review" && (
+          <div className="workflow-builder__body">
+            <div className="builder-evidence">
+              <strong>{workflow ? "Review the detected evidence" : "Define the workflow manually"}</strong>
+              <span>{workflow ? `${workflow.repeat_count} observations · ${durationLabel(workflow.average_duration_s)} average · ${Math.round(workflow.confidence * 100)}% detection confidence` : "Add meaningful application and action names. Passive activity signals are excluded."}</span>
+            </div>
+            <label className="builder-field">
+              <span>Workflow name</span>
+              <input value={name} onChange={(event) => setName(event.target.value)} placeholder="Example: Research and summarize a topic" />
+            </label>
+            <div className="builder-step-heading"><span>Steps</span><small>Review, rename, or remove anything inaccurate.</small></div>
+            <div className="builder-steps">
+              {steps.map((step, index) => (
+                <div className="builder-step" key={`${index}-${step.application}`}>
+                  <span className="step-number">{index + 1}</span>
+                  <label><span>Application</span><input value={step.application} onChange={(event) => updateStep(index, "application", event.target.value)} placeholder="Chrome" /></label>
+                  <label><span>Action</span><input value={friendlyAction(step.action)} onChange={(event) => updateStep(index, "action", event.target.value)} placeholder="Open documentation" /></label>
+                  <button type="button" onClick={() => setSteps((items) => items.filter((_, itemIndex) => itemIndex !== index))} disabled={steps.length <= 2} aria-label={`Remove step ${index + 1}`}><Trash /></button>
+                </div>
+              ))}
+            </div>
+            <button className="builder-add-step" type="button" onClick={() => setSteps((items) => [...items, { application: "", action: "" }])}><Plus /> Add step</button>
+          </div>
+        )}
+
+        {stage === "permissions" && plan && (
+          <div className="workflow-builder__body">
+            <div className="builder-evidence builder-evidence--safe"><ShieldCheck weight="fill" /><div><strong>Preview only</strong><span>No messages are sent and no external data is changed during this test.</span></div></div>
+            <div className="builder-plan-grid">
+              <div><span className="section-label">Planned actions</span>{plan.actions.map((action, index) => <p key={`${action.type}-${index}`}><Check /> {friendlyAction(action.type)}{action.application ? ` — ${action.application}` : ""}</p>)}</div>
+              <div><span className="section-label">Permissions</span>{plan.required_permissions.map((permission) => <label className="permission-row" key={permission}><input type="checkbox" checked={approvedPermissions.includes(permission)} onChange={() => togglePermission(permission)} /><span><strong>{friendlyAction(permission)}</strong><small>Required for this preview only</small></span></label>)}</div>
+            </div>
+          </div>
+        )}
+
+        {stage === "test" && result && (
+          <div className="workflow-builder__body builder-result">
+            <div className="builder-result__icon"><Check weight="bold" /></div>
+            <span className="section-label">Preview completed</span>
+            <h3>{savedWorkflow.name} is ready</h3>
+            <p>{result.result?.message || "The workflow preview completed successfully."}</p>
+            <div><strong>Mode</strong><span>{friendlyAction(result.result?.mode || "preview_only")}</span></div>
+          </div>
+        )}
+
+        {error && <div className="builder-error" role="alert"><WarningCircle weight="fill" /> {error}</div>}
+        <footer className="workflow-builder__footer">
+          {stage === "permissions" && <button className="secondary-small" type="button" onClick={() => setStage("review")}>Back</button>}
+          <span />
+          {stage === "review" && <button className="primary-small" type="button" disabled={!isValid || busy} onClick={preparePlan}>{busy ? "Preparing…" : "Review permissions"}</button>}
+          {stage === "permissions" && <button className="primary-small" type="button" disabled={busy || approvedPermissions.length !== plan.required_permissions.length} onClick={runPreview}>{busy ? "Waiting for Touch ID…" : "Authorize with Touch ID"}</button>}
+          {stage === "test" && <button className="primary-small" type="button" onClick={onClose}>Done</button>}
+        </footer>
+      </section>
+    </div>
+  );
 }
 
 function Header({ title, description, onBack, backend }) {
@@ -76,7 +239,7 @@ function Overview({ backend }) {
   const metrics = backend.metrics;
   const workflow = backend.workflows[0];
   const recommendation = backend.recommendations[0];
-  const [planStatus, setPlanStatus] = useState("");
+  const [builderOpen, setBuilderOpen] = useState(false);
   const switches = metrics?.has_live_data
     ? Math.round((metrics.evidence?.app_switches_per_min || 0) * Math.max(metrics.duration_s / 60, 1))
     : 0;
@@ -87,16 +250,6 @@ function Overview({ backend }) {
     { label: "Workflows found", value: String(backend.workflows.length), detail: `${backend.workflows.filter((item) => item.automation_potential >= 0.68).length} automation-ready`, icon: FlowArrow, tone: "violet" },
   ];
 
-  async function prepareWorkflow() {
-    if (!workflow) return;
-    setPlanStatus("Preparing…");
-    try {
-      await backend.client.createAutomation(workflow.id);
-      setPlanStatus("Plan ready for review");
-    } catch {
-      setPlanStatus("Could not prepare plan");
-    }
-  }
   return (
     <div className="dashboard-page">
       <section className="metrics-row" aria-label="Today’s behavioral summary">
@@ -130,13 +283,13 @@ function Overview({ backend }) {
             <span className="session-track__switch" />
             <span className="session-track__focus session-track__focus--long" />
           </div>
-          <div className="track-legend"><span>9:46 AM</span><span>2 app switches</span><span>Now</span></div>
+          <div className="track-legend"><span>{backend.sessions[0] ? new Date(backend.sessions[0].started_at).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }) : "Start"}</span><span>{switches} app switches</span><span>Now</span></div>
         </article>
 
         <article className="dashboard-card important-insight-card">
           <div className="insight-symbol"><Sparkle weight="fill" /></div>
           <span className="section-label">Important insight</span>
-          <h2>Your research setup is helping you stay focused.</h2>
+          <h2>{metrics?.has_live_data ? (metrics.friction >= 0.44 ? "This task has elevated friction." : "Your current work rhythm is stabilizing.") : "Waiting for enough local evidence."}</h2>
           <p>{metrics?.has_live_data ? `The live focus score is ${Math.round(metrics.focus * 100)} with ${Number(metrics.evidence?.app_switches_per_min || 0).toFixed(1)} app switches per minute.` : "2Bᵐᵉ will surface an evidence-backed insight after the first local event batch."}</p>
           <button type="button" className="inline-action">See supporting evidence <ArrowRight /></button>
         </article>
@@ -150,9 +303,9 @@ function Overview({ backend }) {
             <span className="confidence-chip">{Math.round((workflow?.confidence || metrics?.confidence || 0) * 100)}% confidence</span>
           </div>
           <div className="workflow-mini-sequence">
-            {(workflow?.steps?.map((step) => step.application) || ["Observe", "Normalize", "Compare"]).map((step, index, all) => (
-              <div key={`${step}-${index}`}>
-                <span>{step}</span>
+            {(workflow?.steps || [{ application: "Observe", action: "Collect a complete trace" }, { application: "Compare", action: "Find a repeated sequence" }, { application: "Review", action: "Confirm the steps" }]).map((step, index, all) => (
+              <div key={`${step.application}-${step.action}-${index}`}>
+                <span><strong>{friendlyAction(step.action)}</strong><small>{step.application}</small></span>
                 {index < all.length - 1 && <ArrowRight />}
               </div>
             ))}
@@ -166,11 +319,12 @@ function Overview({ backend }) {
             <span className="section-label">Suggested improvement</span>
             <h2>{recommendation?.title || "No recommendation yet"}</h2>
             <p>{recommendation?.recommendation || "Recommendations appear only after the confidence gate and evidence rules pass."}</p>
-            <div className="recommendation-meta"><strong>{planStatus || "Evidence required"}</strong><span>{Math.round((recommendation?.confidence || 0) * 100)}% confidence</span></div>
+            <div className="recommendation-meta"><strong>{workflow ? "Ready for your review" : "No reliable sequence yet"}</strong><span>{Math.round((recommendation?.confidence || 0) * 100)}% confidence</span></div>
           </div>
-          <button className="primary-small" type="button" disabled={!workflow} onClick={prepareWorkflow}>{workflow ? "Create workflow" : "Learning"}</button>
+          <button className="primary-small" type="button" onClick={() => setBuilderOpen(true)}>{workflow ? "Create workflow" : "Build manually"}</button>
         </article>
       </section>
+      {builderOpen && <WorkflowBuilder workflow={workflow} backend={backend} onClose={() => setBuilderOpen(false)} />}
     </div>
   );
 }
@@ -218,23 +372,12 @@ function ActivityPage({ backend }) {
 function WorkflowsPage({ backend }) {
   const workflows = backend.workflows;
   const [selectedId, setSelectedId] = useState(workflows[0]?.id || null);
-  const [planStatus, setPlanStatus] = useState("");
+  const [builderOpen, setBuilderOpen] = useState(false);
   const selected = workflows.find((workflow) => workflow.id === selectedId) || workflows[0];
 
   useEffect(() => {
     if (!selectedId && workflows[0]) setSelectedId(workflows[0].id);
   }, [selectedId, workflows]);
-
-  async function createWorkflowPlan() {
-    if (!selected) return;
-    setPlanStatus("Preparing…");
-    try {
-      await backend.client.createAutomation(selected.id);
-      setPlanStatus("Awaiting your authorization in the overlay");
-    } catch {
-      setPlanStatus("Plan unavailable");
-    }
-  }
 
   return (
     <div className="dashboard-page workflow-page">
@@ -246,12 +389,12 @@ function WorkflowsPage({ backend }) {
             <span>{item.name}</span><small>{item.repeat_count}× observed</small>
           </button>
         ))}
-        {!workflows.length && <p className="muted-copy">Repeated sequences will appear here.</p>}
+        {!workflows.length && <><p className="muted-copy">No reliable repeated sequences yet. Passive heartbeat signals are excluded.</p><button className="secondary-small workflow-manual-button" type="button" onClick={() => setBuilderOpen(true)}>Create manually</button></>}
       </aside>
       <section className="dashboard-card workflow-detail-card">
         <div className="card-heading">
           <div><span className="section-label">Workflow detail</span><h2>{selected?.name || "No workflow selected"}</h2><p className="muted-copy">{selected ? `${selected.repeat_count} observations · ${durationLabel(selected.average_duration_s)} average · ${Math.round(selected.confidence * 100)}% confidence` : "2Bᵐᵉ needs at least two repeated three-step sequences"}</p></div>
-          <button className="secondary-small" type="button">Rename</button>
+          <button className="secondary-small" type="button" disabled={!selected} onClick={() => setBuilderOpen(true)}>Review and edit</button>
         </div>
         <div className="workflow-steps">
           {(selected?.steps || []).map((step, index) => (
@@ -264,10 +407,11 @@ function WorkflowsPage({ backend }) {
         </div>
         <div className="workflow-opportunity">
           <MagicWand weight="fill" />
-          <div><strong>Automation opportunity</strong><p>{selected ? "Prepare a restricted Level 1 plan from this repeated sequence. Final actions remain behind explicit permission." : "An opportunity appears after repetition and confidence thresholds pass."}</p><small>{planStatus}</small></div>
-          <button className="primary-small" type="button" disabled={!selected} onClick={createWorkflowPlan}>{selected ? "Create workflow" : "Learning"}</button>
+          <div><strong>{selected ? "Automation opportunity" : "Build a workflow manually"}</strong><p>{selected ? "Review the evidence, correct the steps, approve scoped permissions, and run a safe preview." : "Define the steps yourself while 2Bᵐᵉ continues learning reliable repeated sequences."}</p></div>
+          <button className="primary-small" type="button" onClick={() => setBuilderOpen(true)}>{selected ? "Create workflow" : "Create manually"}</button>
         </div>
       </section>
+      {builderOpen && <WorkflowBuilder workflow={selected} backend={backend} onClose={() => setBuilderOpen(false)} />}
     </div>
   );
 }
@@ -412,9 +556,9 @@ export function Dashboard({ onBack, backend }) {
       <aside className="dashboard-sidebar">
         <div className="dashboard-brand"><Brand /><span>Behavioral OS</span></div>
         <nav aria-label="Dashboard navigation">
-          {navigation.map(([label, Icon]) => <button key={label} className={activePage === label ? "is-active" : ""} type="button" onClick={() => { setActivePage(label); backend.client.track("navigation", `open_${label.toLowerCase().replaceAll(" ", "_")}`, { windowContext: "dashboard" }); }}><Icon weight={activePage === label ? "fill" : "regular"} /><span>{label}</span></button>)}
+          {navigation.map(([label, Icon]) => <button key={label} aria-label={label} className={activePage === label ? "is-active" : ""} type="button" onClick={() => { setActivePage(label); backend.client.track("navigation", `open_${label.toLowerCase().replaceAll(" ", "_")}`, { windowContext: "dashboard" }); }}><Icon weight={activePage === label ? "fill" : "regular"} /><span>{label}</span></button>)}
         </nav>
-        <div className="privacy-summary"><ShieldCheck weight="fill" /><div><strong>Privacy protected</strong><span>2 sources disabled</span></div></div>
+        <div className="privacy-summary"><ShieldCheck weight="fill" /><div><strong>Privacy protected</strong><span>{Object.values(backend.privacy).filter((enabled) => !enabled).length} sources disabled</span></div></div>
         <button className="pause-tracking-button" type="button" onClick={() => backend.client.setTracking(backend.status === "PAUSED")}><Pause weight="fill" /> {backend.status === "PAUSED" ? "Resume tracking" : "Pause tracking"}</button>
       </aside>
       <main className="dashboard-main">

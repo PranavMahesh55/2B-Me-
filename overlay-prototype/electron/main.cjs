@@ -3,9 +3,12 @@ const { spawn } = require("node:child_process");
 const http = require("node:http");
 const fs = require("node:fs");
 const path = require("node:path");
+const { CollectorManager } = require("./collector/collectorManager.cjs");
 
 let mainWindow;
 let backendProcess;
+let collector;
+let shutdownStarted = false;
 const projectRoot = path.join(__dirname, "..");
 const backendUrl = "http://127.0.0.1:8765";
 
@@ -101,12 +104,14 @@ function createWindow() {
     ...WINDOW_SIZES.expanded,
     transparent: true,
     frame: false,
+    type: process.platform === "darwin" ? "panel" : undefined,
+    acceptFirstMouse: true,
     resizable: true,
     minimizable: true,
     maximizable: false,
     fullscreenable: false,
     alwaysOnTop: true,
-    skipTaskbar: false,
+    skipTaskbar: true,
     hasShadow: false,
     show: false,
     minWidth: 440,
@@ -121,8 +126,12 @@ function createWindow() {
     },
   });
 
-  mainWindow.setAlwaysOnTop(true, "floating");
+  // Treat this as a system overlay rather than a normal application window.
+  // The screen-saver level keeps it above ordinary and full-screen app windows.
+  mainWindow.setAlwaysOnTop(true, "screen-saver", 1);
   mainWindow.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
+  mainWindow.setFullScreenable(false);
+  mainWindow.setSkipTaskbar(true);
   positionAtTop(mainWindow, WINDOW_SIZES.expanded);
 
   const devUrl = process.env.VITE_DEV_SERVER_URL;
@@ -134,9 +143,15 @@ function createWindow() {
     });
   }
 
-  mainWindow.once("ready-to-show", () => mainWindow.showInactive());
+  mainWindow.once("ready-to-show", () => {
+    mainWindow.setAlwaysOnTop(true, "screen-saver", 1);
+    mainWindow.showInactive();
+  });
   mainWindow.on("focus", () => mainWindow?.webContents.send("desktop:window-focus", true));
-  mainWindow.on("blur", () => mainWindow?.webContents.send("desktop:window-focus", false));
+  mainWindow.on("blur", () => {
+    mainWindow?.setAlwaysOnTop(true, "screen-saver", 1);
+    mainWindow?.webContents.send("desktop:window-focus", false);
+  });
   mainWindow.on("closed", () => { mainWindow = undefined; });
 }
 
@@ -205,8 +220,16 @@ ipcMain.handle("window:minimize", () => {
   return true;
 });
 
+ipcMain.handle("collector:get-session", () => collector?.session || null);
+
 app.whenReady().then(async () => {
+  if (process.platform === "darwin") {
+    app.setActivationPolicy("accessory");
+    app.dock?.hide();
+  }
   await startBackend();
+  collector = new CollectorManager({ backendUrl, queueDirectory: app.getPath("userData") });
+  await collector.start();
   createWindow();
   app.on("activate", () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
@@ -214,8 +237,14 @@ app.whenReady().then(async () => {
   });
 });
 
-app.on("before-quit", () => {
-  if (backendProcess && !backendProcess.killed) backendProcess.kill("SIGTERM");
+app.on("before-quit", (event) => {
+  if (shutdownStarted) return;
+  shutdownStarted = true;
+  event.preventDefault();
+  Promise.resolve(collector?.stop()).finally(() => {
+    if (backendProcess && !backendProcess.killed) backendProcess.kill("SIGTERM");
+    app.quit();
+  });
 });
 
 app.on("window-all-closed", () => {
