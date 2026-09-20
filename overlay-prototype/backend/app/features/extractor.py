@@ -36,11 +36,15 @@ def _workflow_tokens(events: list[RawEvent]) -> list[str]:
         "application_transition",
         "navigation",
         "click",
-        "keyboard_activity",
         "correction",
         "clipboard_action",
         "automation_action",
     }
+    # keyboard_activity is deliberately absent. A typing burst measures the step
+    # the user is already on; it is not a step of its own. While nothing emitted
+    # these events, including them cost nothing -- now that the collector does,
+    # every real action gains a phantom "input burst" partner and the detected
+    # workflow doubles in length.
     ignored_apps = {"2BME", "ELECTRON"}
     result: list[str] = []
     for event in events:

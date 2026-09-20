@@ -40,6 +40,28 @@ def plan_intent(plan: AutomationPlan) -> dict:
     changes that param's hash and the plan hash, and the broker rejects it at
     §7 step 6 rather than quietly running more than was shown.
     """
+    applications = [
+        action["application"]
+        for action in plan.actions
+        if action.get("type") == "open_application" and action.get("application")
+    ]
+
+    # Reproducing the observed steps means reopening those applications in
+    # order, so that is the operation, and the ordered list is a bound param.
+    # §7 step 8 then holds the broker to exactly the list shown on the consent
+    # card: adding an application afterwards is param_mismatch.
+    if applications:
+        return {
+            "connector": "desktop",
+            "operation": "open_application",
+            "resource": f"workflow:{plan.workflow_id}",
+            "params": {
+                "destination": "preview_only",
+                "applications": applications,
+                "actions": [action["type"] for action in plan.actions],
+            },
+        }
+
     terminal = plan.actions[-1]["type"] if plan.actions else "draft_response"
     return {
         "connector": CONNECTOR_BY_OPERATION.get(terminal, "mail"),

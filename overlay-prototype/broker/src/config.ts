@@ -20,6 +20,8 @@ export interface BrokerConfig {
   maxBodyBytes: number;
   auditDbPath: string;
   debugCanonical: boolean;
+  /** Opt-in: lets connectors actually launch applications. */
+  desktopActions: boolean;
 }
 
 export interface RawConfig {
@@ -33,6 +35,7 @@ export interface RawConfig {
   max_body_bytes?: number;
   audit_db_path?: string;
   debug_canonical?: boolean;
+  desktop_actions?: boolean;
 }
 
 export async function loadConfig(raw: RawConfig): Promise<BrokerConfig> {
@@ -69,6 +72,7 @@ export async function loadConfig(raw: RawConfig): Promise<BrokerConfig> {
     maxBodyBytes: raw.max_body_bytes ?? 65_536,
     auditDbPath: raw.audit_db_path ?? "./data/audit.db",
     debugCanonical: raw.debug_canonical ?? false,
+    desktopActions: raw.desktop_actions ?? false,
   };
 }
 
