@@ -289,9 +289,12 @@ class BehaviorBackendClient {
       await this.refreshLists();
       return receipt;
     } catch (error) {
+      // Only report signer_unavailable when that is genuinely what happened.
+      // Defaulting every unexpected error to it tells the user to open the
+      // desktop app while they are already in it.
       this.update({
         authorizing: false,
-        grantError: { code: error.code || "signer_unavailable", message: error.message },
+        grantError: { code: error.code || "malformed_request", message: error.message },
       });
       throw error;
     }
