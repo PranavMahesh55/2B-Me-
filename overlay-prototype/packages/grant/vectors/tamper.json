@@ -1,0 +1,399 @@
+{
+  "version": 1,
+  "generator": "broker/test/fixtures/generate-tamper.ts",
+  "key": {
+    "note": "TEST KEY -- software P-256, not the Enclave key. Several of these cases require minting a correctly signed but deliberately wrong token, which an Enclave key cannot do.",
+    "spki_der_b64url": "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEx65UF6prFcAmZHYAQayeDJO3g0WXzxWyzu8bi_bG7W-0ISgZ9IKVb60PvZuBfcVr07jU0jlqMe0TU7OWsbGN4w",
+    "iss": "oH2v7nOLSG9nL8X9SmEkSHC3TFyXAaqTJNEXRKynLJQ"
+  },
+  "cases": [
+    {
+      "name": "sig_flipped",
+      "expected_error": "signature_invalid",
+      "note": "one byte of the signature changed",
+      "token": {
+        "claims": {
+          "v": 1,
+          "iss": "oH2v7nOLSG9nL8X9SmEkSHC3TFyXAaqTJNEXRKynLJQ",
+          "aud": "broker.local",
+          "jti": "BiGjaMrajFSooyhRdKpb3A",
+          "iat": 1758300000,
+          "exp": 1758300120,
+          "plan_hash": "mBKwg5Gl81e-KgfajqU9CKDM_OwJViVgoCQNiC5sQHU",
+          "scope": {
+            "connector": "mail",
+            "operation": "draft_response",
+            "resource": "workflow:wf_7f3a",
+            "param_hashes": {
+              "destination": "nqbD7DvuYfjHe4W9TVQ4A4-KxqUOmfvENVAU7RzhqWc",
+              "subject": "sGECJf2382B3cXNLYNDY9d1MWsfl4nf2cc5pl-vkL0w"
+            },
+            "max_calls": 1
+          },
+          "presence": {
+            "method": "touchid",
+            "at": 1758299998
+          },
+          "risk": "medium"
+        },
+        "sig": "AjnzPpQUQPMb2L7tDq92Etz9MoXOdcXyYck8JvmasS0yCYGe4sKuFIX_v1Sff2CKArGLSMGx8b6xFROAUs6k3Q",
+        "alg": "ES256"
+      },
+      "plan": {
+        "connector": "mail",
+        "operation": "draft_response",
+        "resource": "workflow:wf_7f3a",
+        "params": {
+          "destination": "preview_only",
+          "subject": "deploy is green"
+        }
+      },
+      "now": 1758300001
+    },
+    {
+      "name": "alg_es384",
+      "expected_error": "signature_invalid",
+      "note": "alg is not ES256, rejected at step 1 before any crypto",
+      "token": {
+        "claims": {
+          "v": 1,
+          "iss": "oH2v7nOLSG9nL8X9SmEkSHC3TFyXAaqTJNEXRKynLJQ",
+          "aud": "broker.local",
+          "jti": "7kpoDZAcR7eCIzdYU6huDw",
+          "iat": 1758300000,
+          "exp": 1758300120,
+          "plan_hash": "mBKwg5Gl81e-KgfajqU9CKDM_OwJViVgoCQNiC5sQHU",
+          "scope": {
+            "connector": "mail",
+            "operation": "draft_response",
+            "resource": "workflow:wf_7f3a",
+            "param_hashes": {
+              "destination": "nqbD7DvuYfjHe4W9TVQ4A4-KxqUOmfvENVAU7RzhqWc",
+              "subject": "sGECJf2382B3cXNLYNDY9d1MWsfl4nf2cc5pl-vkL0w"
+            },
+            "max_calls": 1
+          },
+          "presence": {
+            "method": "touchid",
+            "at": 1758299998
+          },
+          "risk": "medium"
+        },
+        "sig": "CoAaBhuaz3tVyXIC4pLCVOh-654fZhDlQ_LIZ54Cm2zNQREbDmmOCDs72Rggm06mu9Xb0liRCa_bJSN0QW_6XA",
+        "alg": "ES384"
+      },
+      "plan": {
+        "connector": "mail",
+        "operation": "draft_response",
+        "resource": "workflow:wf_7f3a",
+        "params": {
+          "destination": "preview_only",
+          "subject": "deploy is green"
+        }
+      },
+      "now": 1758300001
+    },
+    {
+      "name": "aud_wrong",
+      "expected_error": "signature_invalid",
+      "note": "correctly signed for a different audience; §7 never checks aud, so this is the added binding",
+      "token": {
+        "claims": {
+          "v": 1,
+          "iss": "oH2v7nOLSG9nL8X9SmEkSHC3TFyXAaqTJNEXRKynLJQ",
+          "aud": "someone.else",
+          "jti": "ocaQeB3xczgI0Kq87UBPRg",
+          "iat": 1758300000,
+          "exp": 1758300120,
+          "plan_hash": "mBKwg5Gl81e-KgfajqU9CKDM_OwJViVgoCQNiC5sQHU",
+          "scope": {
+            "connector": "mail",
+            "operation": "draft_response",
+            "resource": "workflow:wf_7f3a",
+            "param_hashes": {
+              "destination": "nqbD7DvuYfjHe4W9TVQ4A4-KxqUOmfvENVAU7RzhqWc",
+              "subject": "sGECJf2382B3cXNLYNDY9d1MWsfl4nf2cc5pl-vkL0w"
+            },
+            "max_calls": 1
+          },
+          "presence": {
+            "method": "touchid",
+            "at": 1758299998
+          },
+          "risk": "medium"
+        },
+        "sig": "z7jdXnlm1jAX2EEdUWuRV4WmyJVxm8fLyOrMXWwf--If_6f9IERyfxeqWq9rvEMvEQTpctlAFHlsegWmgmKQ-g",
+        "alg": "ES256"
+      },
+      "plan": {
+        "connector": "mail",
+        "operation": "draft_response",
+        "resource": "workflow:wf_7f3a",
+        "params": {
+          "destination": "preview_only",
+          "subject": "deploy is green"
+        }
+      },
+      "now": 1758300001
+    },
+    {
+      "name": "iat_future",
+      "expected_error": "not_yet_valid",
+      "note": "iat 600s ahead, well beyond the 5s skew allowance",
+      "token": {
+        "claims": {
+          "v": 1,
+          "iss": "oH2v7nOLSG9nL8X9SmEkSHC3TFyXAaqTJNEXRKynLJQ",
+          "aud": "broker.local",
+          "jti": "H7OnSGY0kndtAR_lMj7sBw",
+          "iat": 1758300600,
+          "exp": 1758300700,
+          "plan_hash": "mBKwg5Gl81e-KgfajqU9CKDM_OwJViVgoCQNiC5sQHU",
+          "scope": {
+            "connector": "mail",
+            "operation": "draft_response",
+            "resource": "workflow:wf_7f3a",
+            "param_hashes": {
+              "destination": "nqbD7DvuYfjHe4W9TVQ4A4-KxqUOmfvENVAU7RzhqWc",
+              "subject": "sGECJf2382B3cXNLYNDY9d1MWsfl4nf2cc5pl-vkL0w"
+            },
+            "max_calls": 1
+          },
+          "presence": {
+            "method": "touchid",
+            "at": 1758299998
+          },
+          "risk": "medium"
+        },
+        "sig": "JV0XtifAZ62o7t50kH8Bd33WKSEKyO93FSZoGrLfjHw2OZH9BhvXFDVGK9SPAvzK35fvwg4QL7evk3Oa-wzzKA",
+        "alg": "ES256"
+      },
+      "plan": {
+        "connector": "mail",
+        "operation": "draft_response",
+        "resource": "workflow:wf_7f3a",
+        "params": {
+          "destination": "preview_only",
+          "subject": "deploy is green"
+        }
+      },
+      "now": 1758300001
+    },
+    {
+      "name": "exp_past",
+      "expected_error": "expired",
+      "note": "exp already behind the clock",
+      "token": {
+        "claims": {
+          "v": 1,
+          "iss": "oH2v7nOLSG9nL8X9SmEkSHC3TFyXAaqTJNEXRKynLJQ",
+          "aud": "broker.local",
+          "jti": "XMc-zzuFnUI59-4HeADHag",
+          "iat": 1758299500,
+          "exp": 1758299999,
+          "plan_hash": "mBKwg5Gl81e-KgfajqU9CKDM_OwJViVgoCQNiC5sQHU",
+          "scope": {
+            "connector": "mail",
+            "operation": "draft_response",
+            "resource": "workflow:wf_7f3a",
+            "param_hashes": {
+              "destination": "nqbD7DvuYfjHe4W9TVQ4A4-KxqUOmfvENVAU7RzhqWc",
+              "subject": "sGECJf2382B3cXNLYNDY9d1MWsfl4nf2cc5pl-vkL0w"
+            },
+            "max_calls": 1
+          },
+          "presence": {
+            "method": "touchid",
+            "at": 1758299998
+          },
+          "risk": "medium"
+        },
+        "sig": "56Mj9V-lb6XZFm4XL1VnOpSXeCr5b4q1Okjg8xzIpHX5uM-Jz3V82l67SpgCHjT9HLwPamE-3CCS2mAmaFQu9Q",
+        "alg": "ES256"
+      },
+      "plan": {
+        "connector": "mail",
+        "operation": "draft_response",
+        "resource": "workflow:wf_7f3a",
+        "params": {
+          "destination": "preview_only",
+          "subject": "deploy is green"
+        }
+      },
+      "now": 1758300001
+    },
+    {
+      "name": "ttl_over_cap",
+      "expected_error": "expired",
+      "note": "a 301s TTL: §7 step 4's second clause, a malformed claim the spec gives the expiry code",
+      "token": {
+        "claims": {
+          "v": 1,
+          "iss": "oH2v7nOLSG9nL8X9SmEkSHC3TFyXAaqTJNEXRKynLJQ",
+          "aud": "broker.local",
+          "jti": "-wzqPlZdxSzH40lI1z7DAw",
+          "iat": 1758300000,
+          "exp": 1758300301,
+          "plan_hash": "mBKwg5Gl81e-KgfajqU9CKDM_OwJViVgoCQNiC5sQHU",
+          "scope": {
+            "connector": "mail",
+            "operation": "draft_response",
+            "resource": "workflow:wf_7f3a",
+            "param_hashes": {
+              "destination": "nqbD7DvuYfjHe4W9TVQ4A4-KxqUOmfvENVAU7RzhqWc",
+              "subject": "sGECJf2382B3cXNLYNDY9d1MWsfl4nf2cc5pl-vkL0w"
+            },
+            "max_calls": 1
+          },
+          "presence": {
+            "method": "touchid",
+            "at": 1758299998
+          },
+          "risk": "medium"
+        },
+        "sig": "btdnHPDuwPUl31HCgX1KjyOz2vB3Si5S1FP9FjOcQN5jEcIdUg8Ws_3gwktOj7b_m7UedKVtucF68DDyXMYXDQ",
+        "alg": "ES256"
+      },
+      "plan": {
+        "connector": "mail",
+        "operation": "draft_response",
+        "resource": "workflow:wf_7f3a",
+        "params": {
+          "destination": "preview_only",
+          "subject": "deploy is green"
+        }
+      },
+      "now": 1758300001
+    },
+    {
+      "name": "plan_hash_wrong",
+      "expected_error": "plan_mismatch",
+      "note": "the submitted plan is not the one that was signed",
+      "token": {
+        "claims": {
+          "v": 1,
+          "iss": "oH2v7nOLSG9nL8X9SmEkSHC3TFyXAaqTJNEXRKynLJQ",
+          "aud": "broker.local",
+          "jti": "2PWvE26VwRpwWM_OD07pcw",
+          "iat": 1758300000,
+          "exp": 1758300120,
+          "plan_hash": "mBKwg5Gl81e-KgfajqU9CKDM_OwJViVgoCQNiC5sQHU",
+          "scope": {
+            "connector": "mail",
+            "operation": "draft_response",
+            "resource": "workflow:wf_7f3a",
+            "param_hashes": {
+              "destination": "nqbD7DvuYfjHe4W9TVQ4A4-KxqUOmfvENVAU7RzhqWc",
+              "subject": "sGECJf2382B3cXNLYNDY9d1MWsfl4nf2cc5pl-vkL0w"
+            },
+            "max_calls": 1
+          },
+          "presence": {
+            "method": "touchid",
+            "at": 1758299998
+          },
+          "risk": "medium"
+        },
+        "sig": "3U6jz13PszoRj3pcFPnlU63QyhyQ0XLl086DAllY6g-DsmRp2FkJvFEuuiOOz3cSBBcKEorg8PvjUd4RbPvrag",
+        "alg": "ES256"
+      },
+      "plan": {
+        "connector": "mail",
+        "operation": "draft_response",
+        "resource": "workflow:somewhere-else",
+        "params": {
+          "destination": "preview_only",
+          "subject": "deploy is green"
+        }
+      },
+      "now": 1758300001
+    },
+    {
+      "name": "unknown_operation",
+      "expected_error": "unknown_operation",
+      "note": "signed for an operation that is not in the registry",
+      "token": {
+        "claims": {
+          "v": 1,
+          "iss": "oH2v7nOLSG9nL8X9SmEkSHC3TFyXAaqTJNEXRKynLJQ",
+          "aud": "broker.local",
+          "jti": "KC0IW56mcOmbAvVC4r7dUQ",
+          "iat": 1758300000,
+          "exp": 1758300120,
+          "plan_hash": "SQqrvaSLgUjvm0nD2WoG0LOQlD2K4VKPwh_2i1jRew4",
+          "scope": {
+            "connector": "mail",
+            "operation": "wire_transfer",
+            "resource": "workflow:wf_7f3a",
+            "param_hashes": {
+              "destination": "nqbD7DvuYfjHe4W9TVQ4A4-KxqUOmfvENVAU7RzhqWc",
+              "subject": "sGECJf2382B3cXNLYNDY9d1MWsfl4nf2cc5pl-vkL0w"
+            },
+            "max_calls": 1
+          },
+          "presence": {
+            "method": "touchid",
+            "at": 1758299998
+          },
+          "risk": "medium"
+        },
+        "sig": "6M_8JHW7Xk1-eAFqwaDK-z_VAlH9mRJfWQqANEdISXfGwai48x_eexk-QS6UVmKU-DIgMOABUqrgIj3cMwmZNw",
+        "alg": "ES256"
+      },
+      "plan": {
+        "connector": "mail",
+        "operation": "wire_transfer",
+        "resource": "workflow:wf_7f3a",
+        "params": {
+          "destination": "preview_only",
+          "subject": "deploy is green"
+        }
+      },
+      "now": 1758300001
+    },
+    {
+      "name": "under_bound_params",
+      "expected_error": "param_mismatch",
+      "note": "§7 step 8's second clause: plan_hash covers bcc, scope.param_hashes does not bind it",
+      "token": {
+        "claims": {
+          "v": 1,
+          "iss": "oH2v7nOLSG9nL8X9SmEkSHC3TFyXAaqTJNEXRKynLJQ",
+          "aud": "broker.local",
+          "jti": "SH1yLFPGKC3JpO2vCNlsvw",
+          "iat": 1758300000,
+          "exp": 1758300120,
+          "plan_hash": "6VpylXi2ZxdzGsVbG1E3S39ljRxepIqLHJatwSTdGHw",
+          "scope": {
+            "connector": "mail",
+            "operation": "draft_response",
+            "resource": "workflow:wf_7f3a",
+            "param_hashes": {
+              "to": "baUx9cYmx2o3TFno_xG6xJEAYYqNgcwE9WU0Eg6M_6o",
+              "subject": "dXLJpMICh9KR5HxyKB-pKq4BsMX5ZLLG8y3Bw_odG6U"
+            },
+            "max_calls": 1
+          },
+          "presence": {
+            "method": "touchid",
+            "at": 1758299998
+          },
+          "risk": "medium"
+        },
+        "sig": "ZEezlNqaooiNxmhJJgDOrajiYxLq8Gcs5WxZm37kjlfQgDdjC8VwaHGXlGlmTXBCtUwyqrgZBga_bQPOCUNfdw",
+        "alg": "ES256"
+      },
+      "plan": {
+        "connector": "mail",
+        "operation": "draft_response",
+        "resource": "workflow:wf_7f3a",
+        "params": {
+          "to": "eng@example.com",
+          "subject": "deploy",
+          "bcc": "legal@example.com"
+        }
+      },
+      "now": 1758300001
+    }
+  ]
+}

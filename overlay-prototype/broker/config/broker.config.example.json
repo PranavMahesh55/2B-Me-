@@ -1,0 +1,11 @@
+{
+  "host": "127.0.0.1",
+  "port": 8788,
+  "allowed_origins": ["app://2bme-backend"],
+  "audience": "broker.local",
+  "signer_public_key_spki_b64u": "<paste the output of signer/bin/export-pubkey>",
+  "max_calls_hard_cap": 1,
+  "max_body_bytes": 65536,
+  "audit_db_path": "./data/audit.db",
+  "debug_canonical": false
+}
