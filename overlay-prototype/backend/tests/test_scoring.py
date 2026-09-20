@@ -190,3 +190,49 @@ def test_keystroke_feature_counts_only_volume():
     assert features["keystrokes_per_min"] > 0
     assert "secret text" not in str(features)
     assert "typed" not in features
+
+
+def test_detector_accepts_real_collector_traces_with_generic_verbs():
+    """The macOS collector can only see the frontmost application, so every
+    event it emits carries a generic verb -- focus, or active. Requiring a
+    descriptive action meant no workflow built from real collected data ever
+    survived: the detector found Preview -> ChatGPT -> TextEdit -> Mail repeated
+    three times and threw it away."""
+    from backend.app.db.models import WorkflowDefinition
+    from backend.app.workflows.detector import _candidate, is_meaningful_workflow
+
+    def verdict(trace, repeats=3):
+        candidate = _candidate(trace * repeats)
+        if not candidate:
+            return False
+        steps = [
+            {
+                "application": token.split("|")[0].removeprefix("APP:").title(),
+                "action": token.split("|")[1].removeprefix("ACTION:").lower(),
+            }
+            for token in candidate[0]
+        ]
+        return is_meaningful_workflow(
+            WorkflowDefinition(
+                signature="auto:x", name="n", steps=steps,
+                model_version="v", repeat_count=candidate[1],
+            )
+        )
+
+    focus = lambda *apps: [f"APP:{a}|ACTION:FOCUS" for a in apps]
+
+    # What the collector actually produces.
+    assert verdict(focus("PREVIEW", "CHATGPT", "TEXTEDIT", "MAIL")) is True
+    assert verdict(focus("PREVIEW", "CHATGPT", "MAIL")) is True
+
+    # Still rejected: bouncing between two applications is switching, not a
+    # workflow, and one application repeating is not a sequence at all.
+    assert verdict(focus("PREVIEW", "CHATGPT", "PREVIEW")) is False
+    assert verdict(["APP:CHATGPT|ACTION:ACTIVE"], repeats=12) is False
+
+    # A descriptive verb still qualifies on its own, as before.
+    assert verdict([
+        "APP:PREVIEW|ACTION:READ_PAPER",
+        "APP:CHATGPT|ACTION:SUMMARIZE",
+        "APP:MAIL|ACTION:SEND",
+    ]) is True

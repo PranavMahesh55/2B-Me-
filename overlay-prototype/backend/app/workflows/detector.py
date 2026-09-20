@@ -53,10 +53,23 @@ def is_meaningful_workflow(workflow: WorkflowDefinition) -> bool:
     }
     ignored_actions = {"active", "focus", "blur", "visible", "hidden"}
     ignored_apps = {"2bme", "electron"}
+    distinct_applications = {
+        application for application, _ in identities if application not in ignored_apps
+    }
+    # The macOS collector can only report the frontmost application, so every
+    # event it produces carries a generic verb: focus, or active. Requiring a
+    # descriptive action meant no workflow built from real collected data ever
+    # survived this check -- the detector found "Preview -> ChatGPT -> TextEdit
+    # -> Mail" repeated three times and discarded it. A sequence spanning three
+    # or more distinct applications is a workflow whatever the verb; the passive
+    # case this guard was written for is a single application repeating, which
+    # len(identities) >= 2 already rejects.
+    has_meaningful_action = any(action not in ignored_actions for _, action in identities)
+
     return (
         len(steps) >= 3
         and len(identities) >= 2
-        and any(action not in ignored_actions for _, action in identities)
+        and (has_meaningful_action or len(distinct_applications) >= 3)
         and any(application not in ignored_apps for application, _ in identities)
         and workflow.repeat_count >= 2
     )
