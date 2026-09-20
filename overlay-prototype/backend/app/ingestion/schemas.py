@@ -76,6 +76,29 @@ class ApprovalInput(BaseModel):
     permissions: list[str] = Field(min_length=1, max_length=12)
 
 
+class GrantTokenInput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    claims: dict[str, Any]
+    sig: str = Field(min_length=1, max_length=256)
+    alg: str = Field(min_length=1, max_length=16)
+
+
+class ExecuteInput(BaseModel):
+    """The body of POST /api/automation/{plan_id}/execute.
+
+    Claim internals are deliberately not validated here. The broker is the
+    authority, and a second validator that disagreed with it would answer 422
+    where the contract requires a GrantErrorCode.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    token: GrantTokenInput
+    plan: dict[str, Any]
+    tamper: Literal["resource", "param", "exp", "sig"] | None = None
+
+
 class PrivacyUpdate(BaseModel):
     enabled: bool
 

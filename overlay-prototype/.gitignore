@@ -1,3 +1,8 @@
 
 # Swift build products
 signer/.build/
+
+# grant runtime state
+.runtime/
+broker/data/
+broker/config/broker.config.json

@@ -15,7 +15,20 @@ const initialState = {
   sessionId: null,
   taskId: null,
   lastError: null,
+  // The grant flow. `pendingIntent` is the /plan payload the backend broadcast;
+  // `authorizing` is the state techspecsigner.md §9 #4 expects the UI to reach.
+  pendingIntent: null,
+  authorizing: false,
+  grantError: null,
+  lastReceipt: null,
 };
+
+export class GrantError extends Error {
+  constructor(code, message) {
+    super(message || code);
+    this.code = code;
+  }
+}
 
 async function request(path, options = {}) {
   const response = await fetch(`${API_BASE}${path}`, {
@@ -24,7 +37,13 @@ async function request(path, options = {}) {
   });
   if (!response.ok) {
     const payload = await response.json().catch(() => ({}));
-    throw new Error(payload.detail || `Backend request failed (${response.status})`);
+    // The grant routes answer with detail: { error: "<GrantErrorCode>" }, so
+    // carry the code rather than stringifying an object into a message.
+    const detail = payload.detail;
+    if (detail && typeof detail === "object" && detail.error) {
+      throw new GrantError(detail.error, detail.message);
+    }
+    throw new Error(typeof detail === "string" ? detail : `Backend request failed (${response.status})`);
   }
   return response.json();
 }
@@ -128,6 +147,23 @@ class BehaviorBackendClient {
         this.update({ status: message.payload.status });
       } else if (message.type === "workflow_updated" || message.type === "recommendation_created") {
         this.refreshLists();
+      } else if (message.type === "permission_request") {
+        // This branch did not exist: the backend has always broadcast
+        // permission_request from POST /api/automation/{id}/plan, and the client
+        // dropped it, so the approval flow dead-ended.
+        this.update({ pendingIntent: message.payload, grantError: null, authorizing: false });
+      } else if (message.type === "automation_status") {
+        if (message.payload.status === "denied") {
+          this.update({ authorizing: false, grantError: { code: message.payload.error } });
+        } else {
+          this.update({
+            authorizing: false,
+            pendingIntent: null,
+            grantError: null,
+            lastReceipt: message.payload,
+          });
+          this.refreshLists();
+        }
       }
     });
     this.socket.addEventListener("close", () => {
@@ -202,6 +238,49 @@ class BehaviorBackendClient {
 
   async createAutomation(workflowId) {
     return request(`/api/automation/${workflowId}/plan`, { method: "POST" });
+  }
+
+  /** Raises the Touch ID prompt through the Electron main process. */
+  async requestGrant(intent, risk) {
+    if (!window.desktopAPI?.requestGrant) {
+      throw new GrantError("signer_unavailable", "Open the desktop app to authorize.");
+    }
+    const result = await window.desktopAPI.requestGrant({ plan: intent, risk });
+    if (!result.ok) throw new GrantError(result.error, result.message);
+    return result.token;
+  }
+
+  /**
+   * The whole consent path: sign, then execute. The plan sent for execution is
+   * the same object that was signed, so the broker's §7 step 6 check compares
+   * like with like.
+   */
+  async authorizeAndExecute(planId, { tamper = null } = {}) {
+    const pending = this.state.pendingIntent;
+    if (!pending) throw new GrantError("malformed_request", "Nothing is awaiting authorization.");
+
+    this.update({ authorizing: true, grantError: null });
+    this.track("task_marker", "grant_requested", { metadata: { plan_id: planId, risk: pending.risk } });
+    try {
+      const token = await this.requestGrant(pending.intent, pending.risk);
+      const receipt = await request(`/api/automation/${planId}/execute`, {
+        method: "POST",
+        body: JSON.stringify({ token, plan: pending.intent, tamper }),
+      });
+      this.update({ authorizing: false, pendingIntent: null, grantError: null, lastReceipt: receipt });
+      await this.refreshLists();
+      return receipt;
+    } catch (error) {
+      this.update({
+        authorizing: false,
+        grantError: { code: error.code || "signer_unavailable", message: error.message },
+      });
+      throw error;
+    }
+  }
+
+  dismissIntent() {
+    this.update({ pendingIntent: null, grantError: null, authorizing: false });
   }
 
   async sendFeedback(recommendationId, feedback, reason = null) {

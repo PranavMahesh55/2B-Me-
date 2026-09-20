@@ -230,7 +230,7 @@ function WorkflowsPage({ backend }) {
     setPlanStatus("Preparing…");
     try {
       await backend.client.createAutomation(selected.id);
-      setPlanStatus("Prepared for permission review");
+      setPlanStatus("Awaiting your authorization in the overlay");
     } catch {
       setPlanStatus("Plan unavailable");
     }

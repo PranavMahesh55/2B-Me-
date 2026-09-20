@@ -38,6 +38,15 @@ class Settings:
     )
     event_flush_ms: int = int(os.getenv("BEHAVIOR_EVENT_FLUSH_MS", "750"))
 
+    # The grant broker runs as its own process (techspecsigner.md §1). This
+    # backend never talks to the signer: a grant must originate from the window
+    # the user clicked, not from a background task.
+    broker_url: str = os.getenv("BEHAVIOR_BROKER_URL", "http://127.0.0.1:8788")
+    broker_origin: str = os.getenv("BEHAVIOR_BROKER_ORIGIN", "app://2bme-backend")
+    launch_secret_path: Path = Path(
+        os.getenv("BEHAVIOR_LAUNCH_SECRET_PATH", str(PROJECT_ROOT / ".runtime" / "launch-secret"))
+    )
+
     @property
     def database_url(self) -> str:
         return f"sqlite:///{self.database_path}"

@@ -1,5 +1,6 @@
 const { app, BrowserWindow, ipcMain, screen } = require("electron");
 const { spawn } = require("node:child_process");
+const http = require("node:http");
 const fs = require("node:fs");
 const path = require("node:path");
 
@@ -7,6 +8,70 @@ let mainWindow;
 let backendProcess;
 const projectRoot = path.join(__dirname, "..");
 const backendUrl = "http://127.0.0.1:8765";
+
+// The renderer never talks to the signer.
+//
+// Packaged, the renderer is a file:// document (see loadFile below), so its
+// fetches carry `Origin: null` -- which is also what any HTML file the user
+// double-clicks sends, so allowlisting it would reopen exactly the hole
+// techspecsigner.md §1 closes. The main process is a Node context, so it can
+// send an `app://` Origin that no browser document can ever produce, plus the
+// launch secret from a 0600 file no web page can read. It also keeps the grant
+// token out of renderer JavaScript.
+const SIGNER = {
+  host: "127.0.0.1",
+  port: Number(process.env.GRANT_SIGNER_PORT || 8787),
+  origin: process.env.GRANT_SIGNER_ORIGIN || "app://2bme-overlay",
+  secretPath: process.env.GRANT_LAUNCH_SECRET_PATH || path.join(projectRoot, ".runtime", "launch-secret"),
+};
+
+function launchSecret() {
+  try {
+    return fs.readFileSync(SIGNER.secretPath, "utf8").trim() || null;
+  } catch {
+    return null;
+  }
+}
+
+function requestGrant(payload) {
+  return new Promise((resolve) => {
+    const body = Buffer.from(JSON.stringify(payload));
+    const headers = {
+      "content-type": "application/json",
+      "content-length": body.length,
+      origin: SIGNER.origin,
+    };
+    const secret = launchSecret();
+    if (secret) headers["x-2bme-launch-secret"] = secret;
+
+    // node:http, not Electron's net module: net routes through Chromium's
+    // stack, which would rewrite or strip the Origin header we are relying on.
+    const request = http.request(
+      { host: SIGNER.host, port: SIGNER.port, path: "/grant", method: "POST", headers },
+      (response) => {
+        const chunks = [];
+        response.on("data", (chunk) => chunks.push(chunk));
+        response.on("end", () => {
+          let parsed;
+          try {
+            parsed = JSON.parse(Buffer.concat(chunks).toString("utf8"));
+          } catch {
+            return resolve({ ok: false, error: "signer_unavailable" });
+          }
+          if (response.statusCode === 200 && parsed.token) return resolve({ ok: true, token: parsed.token });
+          resolve({ ok: false, error: parsed.error || "signer_unavailable", message: parsed.message });
+        });
+      },
+    );
+    // A Touch ID prompt can sit there as long as the user takes.
+    request.setTimeout(120000, () => {
+      request.destroy();
+      resolve({ ok: false, error: "presence_failed", message: "the signer did not respond" });
+    });
+    request.on("error", () => resolve({ ok: false, error: "signer_unavailable" }));
+    request.end(body);
+  });
+}
 
 const WINDOW_SIZES = {
   expanded: { width: 588, height: 682 },
@@ -111,6 +176,17 @@ ipcMain.handle("window:set-mode", (_event, mode) => {
   positionAtTop(mainWindow, size);
   mainWindow.setResizable(mode !== "collapsed");
   return true;
+});
+
+ipcMain.handle("intent:grant", async (event, payload) => {
+  // Only the overlay's own top frame may ask for a grant.
+  if (event.senderFrame !== mainWindow?.webContents.mainFrame) {
+    return { ok: false, error: "signer_unavailable" };
+  }
+  if (!payload || typeof payload !== "object" || !payload.plan || !payload.risk) {
+    return { ok: false, error: "malformed_request" };
+  }
+  return requestGrant({ plan: payload.plan, risk: payload.risk });
 });
 
 ipcMain.handle("window:hide", () => {

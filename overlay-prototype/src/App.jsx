@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { CheckCircle } from "@phosphor-icons/react";
 import { Dashboard } from "./Dashboard.jsx";
 import { Overlay } from "./Overlay.jsx";
@@ -11,6 +11,17 @@ export function App() {
   const [mode, setMode] = useState("overlay");
   const [expanded, setExpanded] = useState(true);
   const [notice, setNotice] = useState("");
+
+  // An authorization prompt the user cannot see is a dark pattern, and in the
+  // desktop app the window has to be resized to show it at all.
+  useEffect(() => {
+    if (!backend.pendingIntent) return;
+    setMode("overlay");
+    setExpanded((current) => {
+      if (!current) window.desktopAPI?.setMode("expanded");
+      return true;
+    });
+  }, [backend.pendingIntent]);
 
   function notify(message) {
     setNotice(message);

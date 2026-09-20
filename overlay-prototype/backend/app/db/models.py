@@ -209,6 +209,14 @@ class AutomationRun(Base):
 
 
 class PermissionGrant(Base):
+    """Superseded by GrantReceipt.
+
+    An approval boolean with no attestation behind it is not an authorization:
+    anything that could write this row could also authorize itself. Kept so the
+    existing table and any rows in it stay readable; nothing writes it now, and
+    execute_plan no longer reads plan.status == "approved".
+    """
+
     __tablename__ = "permission_grants"
 
     id: Mapped[str] = mapped_column(String, primary_key=True, default=lambda: new_id("perm"))
@@ -217,6 +225,29 @@ class PermissionGrant(Base):
     approved: Mapped[bool] = mapped_column(Boolean, default=False)
     approved_by: Mapped[str | None] = mapped_column(String, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc)
+
+
+class GrantReceipt(Base):
+    """What the broker returned for a verified grant (§2's receipt).
+
+    A new table rather than columns on permission_grants: initialize_database()
+    only calls Base.metadata.create_all(), which creates missing tables but never
+    adds columns, and the project has no alembic migrations. Altering the old
+    table would silently do nothing on any existing dev database.
+    """
+
+    __tablename__ = "grant_receipts"
+
+    id: Mapped[str] = mapped_column(String, primary_key=True, default=lambda: new_id("grant"))
+    plan_id: Mapped[str] = mapped_column(ForeignKey("automation_plans.id"), index=True)
+    # A second, independent replay barrier. If this ever fires, the broker's
+    # spent store has a bug.
+    jti: Mapped[str] = mapped_column(String, unique=True, index=True)
+    outcome: Mapped[str] = mapped_column(String, index=True)
+    audit_index: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    audit_hash: Mapped[str | None] = mapped_column(String, nullable=True)
+    executed_at: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc, index=True)
 
 
 class AuditEvent(Base):
