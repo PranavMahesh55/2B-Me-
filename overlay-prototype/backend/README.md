@@ -26,6 +26,7 @@ npm run backend:test
 - Window titles are disabled by default and the collector does not capture them in the current build.
 - No raw keystrokes, clipboard contents, screenshots, passwords, tokens, or text content are accepted into the behavioral event store.
 - The explanation boundary receives only a `SanitizedBehaviorContext` — scored aggregates and an allow-listed subset of evidence keys. It is the single source of recommendation and assistant wording, so a provider cannot be added on a path that skips it. `get_explainer()` in `app/llm/adapter.py` is where one would be chosen; this build always returns the deterministic local fallback.
+- Voice audio never enters this backend. Electron sends transient microphone audio directly to ElevenLabs with a single-use token; this service receives only the resulting user-submitted transcript. Briefings are composed locally from the same `SanitizedBehaviorContext`, and neither transcripts nor briefing text are written to the audit log.
 - Known limitation: `workflow["name"]` crosses that boundary, and detector-generated names are built from application names ("Jira → Vs Code → Terminal"). That is harmless for the local fallback but would disclose the application stack to an external provider.
 
 ## Core routes
@@ -39,6 +40,7 @@ npm run backend:test
 - `POST /api/automation/{plan_id}/execute`
 - `GET /api/automation/chain`
 - `POST /api/assistant/ask`
+- `POST /api/voice/briefing`
 - `GET /api/audit`
 - `GET /api/system/status`
 - `WS /ws`

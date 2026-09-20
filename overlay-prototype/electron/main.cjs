@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, screen } = require("electron");
+const { app, BrowserWindow, ipcMain, screen, session } = require("electron");
 const { spawn } = require("node:child_process");
 const http = require("node:http");
 const fs = require("node:fs");
@@ -9,8 +9,46 @@ let mainWindow;
 let backendProcess;
 let collector;
 let shutdownStarted = false;
+const voiceRequests = new Map();
 const projectRoot = path.join(__dirname, "..");
 const backendUrl = "http://127.0.0.1:8765";
+
+const ELEVENLABS = {
+  apiKey: process.env.ELEVENLABS_API_KEY || "",
+  voiceId: process.env.ELEVENLABS_VOICE_ID || "",
+  apiBase: process.env.ELEVENLABS_API_BASE || "https://api.elevenlabs.io",
+  transcriptionModel: process.env.ELEVENLABS_TRANSCRIPTION_MODEL || "scribe_v2_realtime",
+  speechModel: process.env.ELEVENLABS_SPEECH_MODEL || "eleven_flash_v2_5",
+  briefingModel: process.env.ELEVENLABS_BRIEFING_MODEL || "eleven_multilingual_v2",
+};
+
+const ELEVENLABS_HOSTS = new Set([
+  "api.elevenlabs.io",
+  "api.us.elevenlabs.io",
+  "api.eu.residency.elevenlabs.io",
+  "api.in.residency.elevenlabs.io",
+  "api.sg.residency.elevenlabs.io",
+]);
+
+function elevenLabsBase() {
+  const candidate = new URL(ELEVENLABS.apiBase);
+  if (candidate.protocol !== "https:" || !ELEVENLABS_HOSTS.has(candidate.hostname)) {
+    throw new Error("ELEVENLABS_API_BASE must be an official ElevenLabs HTTPS endpoint");
+  }
+  return `${candidate.origin}`;
+}
+
+function voiceConfigured() {
+  return Boolean(ELEVENLABS.apiKey && ELEVENLABS.voiceId);
+}
+
+function isMainFrame(event) {
+  return Boolean(mainWindow && event.senderFrame === mainWindow.webContents.mainFrame);
+}
+
+function voiceError(code, message) {
+  return { ok: false, error: code, message };
+}
 
 // The renderer never talks to the signer.
 //
@@ -81,6 +119,7 @@ function requestGrant(payload) {
 
 const WINDOW_SIZES = {
   expanded: { width: 588, height: 682 },
+  voice: { width: 588, height: 842 },
   // The consent card adds ~280px; without its own size the Touch ID button is
   // clipped at the window edge.
   authorizing: { width: 588, height: 860 },
@@ -155,6 +194,18 @@ function createWindow() {
   mainWindow.on("closed", () => { mainWindow = undefined; });
 }
 
+function configureMediaPermissions() {
+  const ownsFrame = (webContents) => Boolean(mainWindow && webContents?.id === mainWindow.webContents.id);
+  session.defaultSession.setPermissionCheckHandler((webContents, permission) => (
+    permission === "media" && ownsFrame(webContents)
+  ));
+  session.defaultSession.setPermissionRequestHandler((webContents, permission, callback, details) => {
+    const mediaTypes = details?.mediaTypes || [];
+    const audioOnly = mediaTypes.length === 0 || (mediaTypes.includes("audio") && !mediaTypes.includes("video"));
+    callback(permission === "media" && ownsFrame(webContents) && audioOnly);
+  });
+}
+
 async function backendReady() {
   try {
     const response = await fetch(`${backendUrl}/api/system/status`);
@@ -210,6 +261,118 @@ ipcMain.handle("intent:grant", async (event, payload) => {
   return requestGrant({ plan: payload.plan, risk: payload.risk });
 });
 
+ipcMain.handle("voice:get-status", (event) => {
+  if (!isMainFrame(event)) return voiceError("forbidden", "Voice status is available only to 2Bme.");
+  return {
+    ok: true,
+    configured: voiceConfigured(),
+    voiceId: ELEVENLABS.voiceId ? `${ELEVENLABS.voiceId.slice(0, 4)}…${ELEVENLABS.voiceId.slice(-4)}` : null,
+    transcriptionModel: ELEVENLABS.transcriptionModel,
+    speechModel: ELEVENLABS.speechModel,
+    briefingModel: ELEVENLABS.briefingModel,
+    retentionRequested: "zero",
+  };
+});
+
+ipcMain.handle("voice:create-transcription-session", async (event) => {
+  if (!isMainFrame(event)) return voiceError("forbidden", "Voice sessions are available only to 2Bme.");
+  if (!ELEVENLABS.apiKey) {
+    return voiceError("voice_not_configured", "Add ELEVENLABS_API_KEY to enable voice input.");
+  }
+  try {
+    const apiBase = elevenLabsBase();
+    const response = await fetch(`${apiBase}/v1/single-use-token/realtime_scribe`, {
+      method: "POST",
+      headers: { "xi-api-key": ELEVENLABS.apiKey },
+    });
+    if (!response.ok) {
+      return voiceError(response.status === 401 ? "voice_auth_failed" : "voice_provider_error", `ElevenLabs token request failed (${response.status}).`);
+    }
+    const body = await response.json();
+    if (!body.token) return voiceError("voice_provider_error", "ElevenLabs returned no transcription token.");
+    return {
+      ok: true,
+      token: body.token,
+      websocketBase: apiBase.replace(/^https:/, "wss:"),
+      model: ELEVENLABS.transcriptionModel,
+      expiresInSeconds: 900,
+      zeroRetentionRequested: true,
+    };
+  } catch (error) {
+    return voiceError("voice_unavailable", error.message || "Voice transcription is unavailable.");
+  }
+});
+
+ipcMain.handle("voice:synthesize", async (event, payload) => {
+  if (!isMainFrame(event)) return voiceError("forbidden", "Speech is available only to 2Bme.");
+  if (!voiceConfigured()) {
+    return voiceError("voice_not_configured", "Add ELEVENLABS_API_KEY and ELEVENLABS_VOICE_ID to enable speech.");
+  }
+  const text = typeof payload?.text === "string" ? payload.text.trim() : "";
+  const requestId = typeof payload?.requestId === "string" ? payload.requestId : "";
+  if (!text || text.length > 4000 || !/^[a-zA-Z0-9_-]{8,80}$/.test(requestId)) {
+    return voiceError("invalid_voice_request", "Speech text or request identifier is invalid.");
+  }
+
+  const controller = new AbortController();
+  voiceRequests.set(requestId, controller);
+  try {
+    const model = payload.kind === "briefing" ? ELEVENLABS.briefingModel : ELEVENLABS.speechModel;
+    const response = await fetch(
+      `${elevenLabsBase()}/v1/text-to-speech/${encodeURIComponent(ELEVENLABS.voiceId)}/stream?output_format=mp3_44100_128&enable_logging=false`,
+      {
+        method: "POST",
+        headers: {
+          "accept": "audio/mpeg",
+          "content-type": "application/json",
+          "xi-api-key": ELEVENLABS.apiKey,
+        },
+        body: JSON.stringify({
+          text,
+          model_id: model,
+          voice_settings: { stability: 0.55, similarity_boost: 0.75, style: 0.18, use_speaker_boost: true },
+        }),
+        signal: controller.signal,
+      },
+    );
+    if (!response.ok || !response.body) {
+      const error = response.status === 401 ? "voice_auth_failed" : response.status === 429 ? "voice_quota_exceeded" : "voice_provider_error";
+      event.sender.send("voice:audio-chunk", { requestId, error, done: true });
+      return voiceError(error, `ElevenLabs speech request failed (${response.status}).`);
+    }
+
+    const reader = response.body.getReader();
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      if (value?.byteLength) {
+        event.sender.send("voice:audio-chunk", {
+          requestId,
+          chunk: new Uint8Array(value),
+          contentType: response.headers.get("content-type") || "audio/mpeg",
+          done: false,
+        });
+      }
+    }
+    event.sender.send("voice:audio-chunk", { requestId, done: true });
+    return { ok: true, requestId, model };
+  } catch (error) {
+    const code = error.name === "AbortError" ? "cancelled" : "voice_unavailable";
+    event.sender.send("voice:audio-chunk", { requestId, error: code, done: true });
+    return voiceError(code, code === "cancelled" ? "Speech was cancelled." : "Speech generation is unavailable.");
+  } finally {
+    voiceRequests.delete(requestId);
+  }
+});
+
+ipcMain.handle("voice:cancel", (event, requestId) => {
+  if (!isMainFrame(event)) return false;
+  const controller = voiceRequests.get(requestId);
+  controller?.abort();
+  voiceRequests.delete(requestId);
+  return Boolean(controller);
+});
+
 ipcMain.handle("window:hide", () => {
   mainWindow?.hide();
   return true;
@@ -231,6 +394,7 @@ app.whenReady().then(async () => {
   collector = new CollectorManager({ backendUrl, queueDirectory: app.getPath("userData") });
   await collector.start();
   createWindow();
+  configureMediaPermissions();
   app.on("activate", () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
     else mainWindow?.show();

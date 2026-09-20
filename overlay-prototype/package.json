@@ -8,7 +8,7 @@
     "dev": "vite",
     "build": "vite build && node scripts/prepare-sites-build.mjs",
     "preview": "vite preview",
-    "test:sites": "node --test tests/sites-worker.test.mjs",
+    "test:sites": "node --test tests/*.test.mjs",
     "backend:dev": ".venv/bin/python -m uvicorn backend.app.main:app --host 127.0.0.1 --port 8765 --reload",
     "backend:test": ".venv/bin/python -m pytest backend/tests -q",
     "desktop": "electron electron/main.cjs",
@@ -19,7 +19,8 @@
     "signer:vectors": "./signer/.build/release/grant-signer vectors",
     "broker:dev": "node broker/bin/serve.ts",
     "broker:test": "node --test \"broker/test/*.test.ts\"",
-    "broker:verify-chain": "node broker/bin/verify-chain.ts"
+    "broker:verify-chain": "node broker/bin/verify-chain.ts",
+    "voice:design": "node scripts/design-voice.mjs"
   },
   "dependencies": {
     "@fontsource/inter": "^5.3.0",

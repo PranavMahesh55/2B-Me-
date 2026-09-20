@@ -278,6 +278,69 @@ def test_assistant_answers_from_sanitized_evidence_only():
         assert "assistant_answered" in audit_types
 
 
+def test_voice_briefing_refuses_to_invent_history_and_uses_sanitized_context():
+    with TestClient(app) as client:
+        waiting = client.post(
+            "/api/voice/briefing",
+            json={"session_id": "sess_never_observed", "length": "standard"},
+        ).json()
+        assert waiting["has_live_data"] is False
+        assert waiting["grounded_in"] is None
+        assert "baseline" in waiting["text"].lower()
+
+        session = client.post(
+            "/api/sessions/start",
+            json={"title": "t", "workflow_type": "coding_debugging", "device_id": "device_voice"},
+        ).json()
+        client.post(
+            "/api/events/batch",
+            json={"events": event_batch(session["id"], session["task_id"], prefix="voice")},
+        )
+        briefing = client.post(
+            "/api/voice/briefing",
+            json={"session_id": session["id"], "length": "standard"},
+        ).json()
+
+        assert briefing["has_live_data"] is True
+        assert briefing["sections"]
+        assert set(briefing["grounded_in"]) == {"workflow", "behavior", "evidence"}
+        assert set(briefing["grounded_in"]["evidence"]).issubset(ContextSanitizer.allowed_evidence)
+        assert session["id"] not in briefing["text"]
+        assert session["task_id"] not in briefing["text"]
+
+        audits = client.get("/api/audit").json()
+        voice_audit = next(item for item in audits if item["event"] == "voice_briefing_generated")
+        assert set(voice_audit["payload"]) == {"length"}
+
+
+def test_voice_workflow_request_can_only_suggest_a_reviewable_draft():
+    with TestClient(app) as client:
+        session = client.post(
+            "/api/sessions/start",
+            json={"title": "t", "workflow_type": "coding_debugging", "device_id": "device_voice_draft"},
+        ).json()
+        client.post(
+            "/api/events/batch",
+            json={"events": event_batch(session["id"], session["task_id"], prefix="voice_draft")},
+        )
+
+        ordinary = client.post(
+            "/api/assistant/ask",
+            json={"question": "What should I automate?", "session_id": session["id"]},
+        ).json()
+        requested = client.post(
+            "/api/assistant/ask",
+            json={"question": "Turn this into a workflow", "session_id": session["id"]},
+        ).json()
+
+        assert ordinary["suggested_action"] is None
+        assert requested["suggested_action"]["type"] == "open_workflow_draft"
+        assert requested["suggested_action"]["workflow_id"].startswith("wf_")
+        # The assistant returns no execution token or approval shortcut.
+        assert "token" not in requested
+        assert "approved" not in requested
+
+
 def test_recorded_session_replays_into_a_fresh_store(tmp_path):
     from backend.app.replay.recorder import record_session
     from backend.app.replay.replay import replay

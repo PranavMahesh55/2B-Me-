@@ -11,6 +11,7 @@ export function App() {
   const [mode, setMode] = useState("overlay");
   const [expanded, setExpanded] = useState(true);
   const [notice, setNotice] = useState("");
+  const [dashboardTarget, setDashboardTarget] = useState({ page: "Overview", workflowId: null });
 
   // An authorization prompt the user cannot see is a dark pattern, and in the
   // desktop app the window has to be resized to show it at all.
@@ -42,7 +43,10 @@ export function App() {
     window.desktopAPI?.setMode(nextExpanded ? "expanded" : "collapsed");
   }
 
-  function openDashboard() {
+  function openDashboard(page = "Overview", workflowId = null) {
+    const targetPage = typeof page === "string" ? page : "Overview";
+    const targetWorkflowId = typeof workflowId === "string" ? workflowId : null;
+    setDashboardTarget({ page: targetPage, workflowId: targetWorkflowId });
     setMode("dashboard");
     backend.client.track("navigation", "open_dashboard", { windowContext: "dashboard" });
     window.desktopAPI?.setMode("dashboard");
@@ -74,7 +78,12 @@ export function App() {
             backend={backend}
           />
         ) : (
-          <Dashboard onBack={returnToOverlay} backend={backend} />
+          <Dashboard
+            onBack={returnToOverlay}
+            backend={backend}
+            initialPage={dashboardTarget.page}
+            requestedWorkflowId={dashboardTarget.workflowId}
+          />
         )}
       </div>
       {notice && <div className="toast" role="status"><CheckCircle weight="fill" /> {notice}</div>}

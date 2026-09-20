@@ -16,6 +16,10 @@ import {
   Play,
   ShieldCheck,
   Sparkle,
+  Pulse,
+  SpeakerHigh,
+  Stop,
+  Waveform,
   WarningCircle,
   X,
 } from "@phosphor-icons/react";
@@ -29,6 +33,7 @@ import {
 } from "recharts";
 import { rhythmData } from "./data.js";
 import { grantCopy } from "./grantCopy.js";
+import { useVoice } from "./voice.js";
 
 // §3's TTLs. The countdown is the honest reason to hurry: the grant really does
 // stop being valid.
@@ -89,6 +94,8 @@ export function Overlay({ expanded, onExpandedChange, onOpenDashboard, onHide, b
   const [savedNote, setSavedNote] = useState("");
   const [seconds, setSeconds] = useState(0);
   const [grantSeconds, setGrantSeconds] = useState(0);
+  const [voiceAnswer, setVoiceAnswer] = useState(null);
+  const voice = useVoice();
 
   const pendingIntent = backend?.pendingIntent || null;
   const authorizing = Boolean(backend?.authorizing);
@@ -213,6 +220,12 @@ export function Overlay({ expanded, onExpandedChange, onOpenDashboard, onHide, b
     if (backend?.status === "COLLECTING") setTracking(true);
   }, [backend?.status]);
 
+  useEffect(() => {
+    if (!expanded || pendingIntent) return;
+    const voiceOpen = !["idle", "cancelled"].includes(voice.phase) || Boolean(voiceAnswer);
+    window.desktopAPI?.setMode(voiceOpen ? "voice" : "expanded");
+  }, [expanded, pendingIntent, voice.phase, voiceAnswer]);
+
   const stateLabel = useMemo(() => {
     if (!backend?.connected) return "Backend reconnecting";
     // §9 #4: the UI has to reach an observable `authorizing` state.
@@ -259,6 +272,44 @@ export function Overlay({ expanded, onExpandedChange, onOpenDashboard, onHide, b
     } catch {
       // The error is already in backend.grantError; the card renders it.
     }
+  }
+
+  async function sendVoiceQuestion() {
+    const question = voice.transcript.trim();
+    if (!question) return;
+    voice.controller.markThinking();
+    try {
+      const reply = await backend.client.askAssistant(question);
+      backend.client.track("navigation", "voice_assistant_question", {
+        windowContext: "voice_overlay",
+        metadata: { category: reply.category, model_version: reply.model_version },
+      });
+      setVoiceAnswer(reply);
+      voice.controller.setTranscript("");
+      await voice.controller.speak(reply.answer);
+    } catch (error) {
+      voice.controller.fail(error);
+    }
+  }
+
+  async function requestBriefing() {
+    voice.controller.markThinking();
+    try {
+      const briefing = await backend.client.getVoiceBriefing(voice.preferences.briefingLength);
+      backend.client.track("navigation", "voice_briefing", {
+        windowContext: "voice_overlay",
+        metadata: { has_live_data: briefing.has_live_data, model_version: briefing.model_version },
+      });
+      setVoiceAnswer({ answer: briefing.text, grounded_in: briefing.grounded_in, briefing: true });
+      await voice.controller.speak(briefing.text, "briefing");
+    } catch (error) {
+      voice.controller.fail(error);
+    }
+  }
+
+  function closeVoice() {
+    voice.controller.cancel();
+    setVoiceAnswer(null);
   }
 
   function renderIntent() {
@@ -373,12 +424,26 @@ export function Overlay({ expanded, onExpandedChange, onOpenDashboard, onHide, b
         )}
         <div className="capsule-divider" />
         <button
+          className={voice.phase === "listening" ? "voice-capsule-button no-drag is-listening" : "voice-capsule-button no-drag"}
+          type="button"
+          aria-label="Click or hold to ask 2B me"
+          title="Click to start and stop, or hold to talk"
+          disabled={!voice.preferences.enabled}
+          onPointerDown={(event) => { event.currentTarget.setPointerCapture(event.pointerId); voice.controller.beginListeningPress(); }}
+          onPointerUp={() => voice.controller.endListeningPress()}
+          onPointerCancel={() => voice.controller.cancel()}
+          onKeyDown={(event) => { if (["Enter", " "].includes(event.key) && !event.repeat) { event.preventDefault(); voice.controller.toggleListening(); } }}
+        >
+          {voice.phase === "listening" ? <Waveform weight="bold" /> : <Microphone weight="fill" />}
+          <span>{voice.phase === "requesting_permission" ? "Starting…" : voice.phase === "listening" ? "Listening" : voice.phase === "transcribing" ? "Finishing…" : "Ask"}</span>
+        </button>
+        <button
           className="status-button no-drag"
           type="button"
           onClick={() => setPrivacyOpen((value) => !value)}
           aria-expanded={privacyOpen}
         >
-          <Microphone weight="fill" aria-hidden="true" />
+          <Pulse weight="fill" aria-hidden="true" />
           <span>{tracking ? "Active" : "Paused"}</span>
         </button>
         <button
@@ -464,6 +529,37 @@ export function Overlay({ expanded, onExpandedChange, onOpenDashboard, onHide, b
               <Check weight="bold" />
               <span>{keysPerMin.toFixed(0)} keystrokes/min · {appSwitches.toFixed(1)} app switches/min · {Math.round((liveMetrics?.confidence || 0) * 100)}% model confidence</span>
             </div>
+          )}
+
+          {(!["idle", "cancelled"].includes(voice.phase) || voiceAnswer) && (
+            <section className="overlay-voice-card no-drag" aria-live="polite">
+              <div className="overlay-voice-heading">
+                <div>
+                  <span className="eyebrow eyebrow--lime">Voice presence</span>
+                  <strong>{voice.phase === "requesting_permission" ? "Starting the microphone…" : voice.phase === "listening" ? "Listening—click again or release when you’re done" : voice.phase === "transcribing" ? "Finishing the transcript…" : voice.phase === "thinking" ? "Grounding the answer locally…" : voice.phase === "speaking" ? "Speaking" : voice.phase === "error" ? "Voice unavailable" : voiceAnswer ? "2Bᵐᵉ response" : "Review before sending"}</strong>
+                </div>
+                <button type="button" className="voice-close" onClick={closeVoice} aria-label="Close voice"><X /></button>
+              </div>
+              {(voice.phase === "listening" || voice.phase === "transcribing") && (
+                <div className="voice-live-line"><Waveform /> {voice.partialTranscript || "Your audio is processed transiently and is not stored."}</div>
+              )}
+              {voice.phase === "reviewing" && (
+                <div className="voice-review">
+                  <textarea aria-label="Voice transcript" value={voice.transcript} onChange={(event) => voice.controller.setTranscript(event.target.value)} />
+                  <button type="button" onClick={sendVoiceQuestion}>Send</button>
+                </div>
+              )}
+              {voice.error && <p className="voice-error" role="alert">{voice.error}</p>}
+              {voiceAnswer && (
+                <div className="voice-answer">
+                  <p>{voiceAnswer.answer}</p>
+                  <div>
+                    {voice.phase === "speaking" ? <button type="button" onClick={() => voice.controller.stopSpeaking()}><Stop /> Stop</button> : <button type="button" onClick={() => voice.controller.speak(voiceAnswer.answer, voiceAnswer.briefing ? "briefing" : "response")}><SpeakerHigh /> Replay</button>}
+                    {voiceAnswer.suggested_action?.type === "open_workflow_draft" && <button type="button" onClick={() => onOpenDashboard("Workflows", voiceAnswer.suggested_action.workflow_id)}>Review workflow draft</button>}
+                  </div>
+                </div>
+              )}
+            </section>
           )}
 
           <div className="rhythm-section">
@@ -613,12 +709,15 @@ export function Overlay({ expanded, onExpandedChange, onOpenDashboard, onHide, b
               <NotePencil weight="fill" />
               {noteOpen ? "Close note" : "Capture note"}
             </button>
+            <button className="secondary-action" type="button" onClick={requestBriefing} disabled={voice.phase === "thinking" || voice.phase === "speaking"}>
+              <SpeakerHigh weight="fill" /> Brief me
+            </button>
           </div>
 
           <footer className="panel-footer">
             <span className="drag-copy drag-region"><DotsSixVertical /> Drag to reposition</span>
             <button type="button" onClick={toggleTracking}>
-              {tracking ? <Microphone weight="fill" /> : <Microphone />}
+              {tracking ? <Pulse weight="fill" /> : <Pulse />}
               {tracking ? "Tracking active" : "Tracking paused"}
               <span className={tracking ? "tiny-status" : "tiny-status is-paused"} />
             </button>

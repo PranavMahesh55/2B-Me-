@@ -6,7 +6,7 @@ from contextlib import asynccontextmanager, suppress
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from backend.app.api import assistant, audit, automation, events, metrics, recommendations, sessions, system, websocket, workflows
+from backend.app.api import assistant, audit, automation, events, metrics, recommendations, sessions, system, voice, websocket, workflows
 from backend.app.api.websocket import manager
 from backend.app.config.settings import settings
 from backend.app.db.models import PrivacySetting
@@ -79,6 +79,7 @@ app.include_router(workflows.router)
 app.include_router(recommendations.router)
 app.include_router(automation.router)
 app.include_router(assistant.router)
+app.include_router(voice.router)
 app.include_router(audit.router)
 app.include_router(system.router)
 app.include_router(websocket.router)

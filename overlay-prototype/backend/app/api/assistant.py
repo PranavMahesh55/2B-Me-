@@ -82,32 +82,21 @@ def compose(category: str, context: SanitizedBehaviorContext) -> str:
     )
 
 
-@router.post("/ask")
-def ask(body: AssistantQuestion, db: Session = Depends(get_db)) -> dict:
+def current_context(
+    db: Session, session_id: str | None = None
+) -> tuple[BehaviorScore | None, WorkflowDefinition | None, SanitizedBehaviorContext | None]:
+    """Return the newest live score through the one sanctioned privacy boundary.
+
+    Voice briefings use this too. Keeping the lookup here prevents a second
+    feature from quietly constructing a wider context than the assistant.
+    """
     query = select(BehaviorScore)
-    if body.session_id:
-        query = query.where(BehaviorScore.session_id == body.session_id)
+    if session_id:
+        query = query.where(BehaviorScore.session_id == session_id)
     score = db.scalar(query.order_by(desc(BehaviorScore.created_at)))
-    category = classify(body.question)
-
-    # AGENTS.md: keep behavioral conclusions explainable, and never invent
-    # personal history while the backend is still collecting evidence.
     if not score or score.data_origin != "live_observed":
-        return {
-            "answer": (
-                "I am still building the local baseline. I will not describe personal "
-                "history before there is observed activity to ground it in."
-            ),
-            "category": category,
-            "grounded_in": None,
-            "has_live_data": False,
-            "model_version": runtime.model_config.version,
-        }
+        return score, None, None
 
-    # WorkflowDefinition is global -- keyed by signature, with no session link --
-    # so the newest score and the strongest workflow can belong to different
-    # sessions. Only describe a repetition this score actually saw, or the answer
-    # can quote a repeat count that contradicts the evidence shown beneath it.
     evidence = score.evidence or {}
     observed_repeats = int(evidence.get("workflow_repeat_count", 0) or 0)
     workflow = (
@@ -118,8 +107,6 @@ def ask(body: AssistantQuestion, db: Session = Depends(get_db)) -> dict:
     context = ContextSanitizer().sanitize(
         {
             "name": workflow.name,
-            # From the score, not the workflow record: the two are updated by
-            # different passes and the answer must only quote what it displays.
             "repeat_count": observed_repeats,
             "average_duration_s": workflow.average_duration_s,
         }
@@ -133,6 +120,44 @@ def ask(body: AssistantQuestion, db: Session = Depends(get_db)) -> dict:
             "evidence": evidence,
         },
     )
+    return score, workflow, context
+
+
+def wants_workflow_draft(question: str) -> bool:
+    lowered = question.lower()
+    return any(
+        phrase in lowered
+        for phrase in (
+            "turn this into a workflow",
+            "create a workflow",
+            "create workflow",
+            "draft a workflow",
+            "draft workflow",
+            "build a workflow",
+            "make this a workflow",
+        )
+    )
+
+
+@router.post("/ask")
+def ask(body: AssistantQuestion, db: Session = Depends(get_db)) -> dict:
+    score, workflow, context = current_context(db, body.session_id)
+    category = classify(body.question)
+
+    # AGENTS.md: keep behavioral conclusions explainable, and never invent
+    # personal history while the backend is still collecting evidence.
+    if not score or context is None:
+        return {
+            "answer": (
+                "I am still building the local baseline. I will not describe personal "
+                "history before there is observed activity to ground it in."
+            ),
+            "category": category,
+            "grounded_in": None,
+            "has_live_data": False,
+            "model_version": runtime.model_config.version,
+            "suggested_action": None,
+        }
 
     record_audit(
         db,
@@ -151,4 +176,13 @@ def ask(body: AssistantQuestion, db: Session = Depends(get_db)) -> dict:
         "has_live_data": True,
         "model_version": score.model_version,
         "data_origin": score.data_origin,
+        "suggested_action": (
+            {
+                "type": "open_workflow_draft",
+                "workflow_id": workflow.id,
+                "label": "Review workflow draft",
+            }
+            if workflow and wants_workflow_draft(body.question)
+            else None
+        ),
     }

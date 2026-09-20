@@ -347,6 +347,13 @@ class BehaviorBackendClient {
     });
   }
 
+  async getVoiceBriefing(length = "standard") {
+    return request("/api/voice/briefing", {
+      method: "POST",
+      body: JSON.stringify({ length, session_id: this.state.sessionId }),
+    });
+  }
+
   async sendFeedback(recommendationId, feedback, reason = null) {
     const result = await request(`/api/recommendations/${recommendationId}/feedback`, {
       method: "POST",

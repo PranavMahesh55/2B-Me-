@@ -14,20 +14,25 @@ import {
   List,
   MagicWand,
   MagnifyingGlass,
+  Microphone,
   Pause,
   Play,
   Repeat,
+  SpeakerHigh,
+  Stop,
   ShieldCheck,
   Sparkle,
   SquaresFour,
   Plus,
   Trash,
   WarningCircle,
+  Waveform,
   X,
 } from "@phosphor-icons/react";
 import { grantCopy } from "./grantCopy.js";
 import { Brand } from "./Overlay.jsx";
 import { trackingSources } from "./data.js";
+import { useVoice } from "./voice.js";
 
 const navigation = [
   ["Overview", SquaresFour],
@@ -384,10 +389,11 @@ function ActivityPage({ backend }) {
   );
 }
 
-function WorkflowsPage({ backend }) {
+function WorkflowsPage({ backend, requestedWorkflowId = null }) {
   const workflows = backend.workflows;
-  const [selectedId, setSelectedId] = useState(workflows[0]?.id || null);
-  const [builderOpen, setBuilderOpen] = useState(false);
+  const requestedExists = workflows.some((workflow) => workflow.id === requestedWorkflowId);
+  const [selectedId, setSelectedId] = useState(requestedExists ? requestedWorkflowId : (workflows[0]?.id || null));
+  const [builderOpen, setBuilderOpen] = useState(requestedExists);
   const selected = workflows.find((workflow) => workflow.id === selectedId) || workflows[0];
 
   useEffect(() => {
@@ -480,20 +486,29 @@ function InsightsPage({ backend }) {
   );
 }
 
-function AssistantPage({ backend }) {
+function AssistantPage({ backend, onOpenWorkflowDraft }) {
   const [question, setQuestion] = useState("");
   const [pending, setPending] = useState(false);
   const [messages, setMessages] = useState([
     { role: "assistant", text: "Ask me about your work patterns, friction, repeated workflows, or what to automate." },
   ]);
+  const voice = useVoice();
 
-  async function ask(event) {
-    event.preventDefault();
-    if (!question.trim() || pending) return;
-    const userQuestion = question.trim();
+  useEffect(() => {
+    if (["listening", "transcribing", "reviewing"].includes(voice.phase)) {
+      setQuestion(voice.transcript || voice.partialTranscript);
+    }
+  }, [voice.partialTranscript, voice.phase, voice.transcript]);
+
+  async function ask(event, spokenQuestion = null) {
+    event?.preventDefault?.();
+    const userQuestion = (spokenQuestion ?? question).trim();
+    if (!userQuestion || pending) return;
     setQuestion("");
+    voice.controller.setTranscript("");
     setMessages((items) => [...items, { role: "user", text: userQuestion }]);
     setPending(true);
+    voice.controller.markThinking();
     try {
       // The answer is composed on the backend from a sanitized context. It used
       // to be built here by string-matching the question against raw metrics,
@@ -509,14 +524,45 @@ function AssistantPage({ backend }) {
         text: reply.answer,
         grounding: reply.grounded_in,
         modelVersion: reply.model_version,
+        suggestedAction: reply.suggested_action,
       }]);
+      await voice.controller.speak(reply.answer);
     } catch (caught) {
       setMessages((items) => [...items, {
         role: "assistant",
         text: caught.message || "The local intelligence service could not answer that.",
       }]);
+      voice.controller.fail(caught);
     } finally {
       setPending(false);
+      if (!voice.preferences.spokenResponses) voice.controller.markIdle();
+    }
+  }
+
+  async function briefMe() {
+    if (pending) return;
+    setPending(true);
+    voice.controller.markThinking();
+    try {
+      const briefing = await backend.client.getVoiceBriefing(voice.preferences.briefingLength);
+      backend.client.track("navigation", "voice_briefing", {
+        windowContext: "ai_assistant",
+        metadata: { has_live_data: briefing.has_live_data, model_version: briefing.model_version },
+      });
+      setMessages((items) => [...items, {
+        role: "assistant",
+        text: briefing.text,
+        grounding: briefing.grounded_in,
+        modelVersion: briefing.model_version,
+        briefing: true,
+      }]);
+      await voice.controller.speak(briefing.text, "briefing");
+    } catch (caught) {
+      setMessages((items) => [...items, { role: "assistant", text: caught.message || "The briefing could not be prepared." }]);
+      voice.controller.fail(caught);
+    } finally {
+      setPending(false);
+      if (!voice.preferences.spokenResponses) voice.controller.markIdle();
     }
   }
 
@@ -527,7 +573,7 @@ function AssistantPage({ backend }) {
         <div className="message-list">
           {messages.map((message, index) => (
             <div key={`${message.role}-${index}`} className={`message message--${message.role}`}>
-              {message.text}
+              <div>{message.text}</div>
               {message.grounding && (
                 <details className="message-grounding">
                   <summary>What this is based on</summary>
@@ -545,13 +591,35 @@ function AssistantPage({ backend }) {
                   <small>Scored evidence only — no window titles, keystrokes or content. {message.modelVersion}</small>
                 </details>
               )}
+              {message.role === "assistant" && index > 0 && (
+                <div className="message-actions">
+                  <button type="button" onClick={() => voice.controller.speak(message.text, message.briefing ? "briefing" : "response")}><SpeakerHigh /> Replay</button>
+                  {message.suggestedAction?.type === "open_workflow_draft" && <button type="button" onClick={() => onOpenWorkflowDraft(message.suggestedAction.workflow_id)}><MagicWand /> Review workflow draft</button>}
+                </div>
+              )}
             </div>
           ))}
         </div>
         <div className="prompt-suggestions">
           {["What slowed me down today?", "What should I automate?", "When was I most focused?"].map((prompt) => <button key={prompt} type="button" onClick={() => setQuestion(prompt)}>{prompt}</button>)}
+          <button type="button" onClick={briefMe}><SpeakerHigh /> Brief me</button>
         </div>
-        <form className="assistant-input" onSubmit={ask}><input value={question} onChange={(event) => setQuestion(event.target.value)} placeholder={pending ? "Thinking…" : "Ask about your behavior…"} disabled={pending} /><button type="submit" disabled={pending}><ArrowRight /></button></form>
+        {voice.error && <div className="assistant-voice-notice" role="alert">{voice.error}</div>}
+        <form className="assistant-input" onSubmit={ask}>
+          <button
+            className={voice.phase === "listening" ? "assistant-mic is-listening" : "assistant-mic"}
+            type="button"
+            aria-label="Click or hold to ask by voice"
+            title="Click to start and stop, or hold to talk"
+            disabled={!voice.preferences.enabled || pending}
+            onPointerDown={(event) => { event.currentTarget.setPointerCapture(event.pointerId); voice.controller.beginListeningPress(); }}
+            onPointerUp={() => voice.controller.endListeningPress()}
+            onPointerCancel={() => voice.controller.cancel()}
+            onKeyDown={(event) => { if (["Enter", " "].includes(event.key) && !event.repeat) { event.preventDefault(); voice.controller.toggleListening(); } }}
+          >{voice.phase === "listening" ? <Waveform /> : <Microphone weight="fill" />}</button>
+          <input value={question} onChange={(event) => { setQuestion(event.target.value); if (voice.phase === "reviewing") voice.controller.setTranscript(event.target.value); }} placeholder={pending ? "Thinking…" : voice.phase === "listening" ? "Listening…" : voice.phase === "transcribing" ? "Finishing transcript…" : "Ask about your behavior…"} disabled={pending || voice.phase === "listening" || voice.phase === "transcribing"} />
+          {voice.phase === "speaking" ? <button type="button" onClick={() => voice.controller.stopSpeaking()} aria-label="Stop speaking"><Stop /></button> : <button type="submit" disabled={pending}><ArrowRight /></button>}
+        </form>
       </section>
     </div>
   );
@@ -559,6 +627,7 @@ function AssistantPage({ backend }) {
 
 function SettingsPage({ backend }) {
   const [sources, setSources] = useState(Object.fromEntries(trackingSources));
+  const voice = useVoice();
 
   useEffect(() => {
     if (!Object.keys(backend.privacy).length) return;
@@ -585,6 +654,16 @@ function SettingsPage({ backend }) {
         </div>
       </section>
       <section className="dashboard-card exclusions-card"><div><span className="section-label">Application exclusions</span><h2>Always private</h2><p>Password Manager, Banking, Personal Messages, and private browser windows are excluded.</p></div><button className="secondary-small" type="button">Manage exclusions</button></section>
+      <section className="dashboard-card settings-card voice-settings-card">
+        <div className="settings-heading"><SpeakerHigh weight="fill" /><div><span className="section-label">ElevenLabs voice</span><h2>Voice presence</h2><p>Audio is processed transiently. Transcripts stay only in the active conversation.</p></div></div>
+        <div className="settings-list">
+          <div className="setting-row"><div><strong>Voice features</strong><span>{voice.configured === false ? "Needs an API key and voice ID" : "Push-to-talk and briefings"}</span></div><button type="button" role="switch" aria-checked={voice.preferences.enabled} className={voice.preferences.enabled ? "toggle is-on" : "toggle"} onClick={() => voice.controller.updatePreferences({ enabled: !voice.preferences.enabled })}><span /></button></div>
+          <div className="setting-row"><div><strong>Spoken responses</strong><span>Read grounded answers aloud</span></div><button type="button" role="switch" aria-checked={voice.preferences.spokenResponses} className={voice.preferences.spokenResponses ? "toggle is-on" : "toggle"} onClick={() => voice.controller.updatePreferences({ spokenResponses: !voice.preferences.spokenResponses })}><span /></button></div>
+          <div className="setting-row"><div><strong>Automatic language detection</strong><span>Use the language you speak</span></div><button type="button" role="switch" aria-checked={voice.preferences.autoLanguage} className={voice.preferences.autoLanguage ? "toggle is-on" : "toggle"} onClick={() => voice.controller.updatePreferences({ autoLanguage: !voice.preferences.autoLanguage })}><span /></button></div>
+          <label className="setting-row voice-range"><div><strong>Voice volume</strong><span>{Math.round(voice.preferences.volume * 100)}%</span></div><input type="range" min="0" max="1" step="0.05" value={voice.preferences.volume} onChange={(event) => voice.controller.updatePreferences({ volume: Number(event.target.value) })} /></label>
+          <label className="setting-row voice-select"><div><strong>Briefing length</strong><span>Focused periods are always kept concise</span></div><select value={voice.preferences.briefingLength} onChange={(event) => voice.controller.updatePreferences({ briefingLength: event.target.value })}><option value="short">Short</option><option value="standard">Standard</option></select></label>
+        </div>
+      </section>
     </div>
   );
 }
@@ -598,8 +677,14 @@ const pageDescriptions = {
   Settings: "Tracking, privacy, exclusions, and overlay behavior.",
 };
 
-export function Dashboard({ onBack, backend }) {
-  const [activePage, setActivePage] = useState("Overview");
+export function Dashboard({ onBack, backend, initialPage = "Overview", requestedWorkflowId = null }) {
+  const [activePage, setActivePage] = useState(initialPage);
+  const [voiceWorkflowId, setVoiceWorkflowId] = useState(requestedWorkflowId);
+
+  function openWorkflowDraft(workflowId) {
+    setVoiceWorkflowId(workflowId);
+    setActivePage("Workflows");
+  }
 
   return (
     <section className="dashboard-shell">
@@ -616,9 +701,9 @@ export function Dashboard({ onBack, backend }) {
         <div className="dashboard-scroll">
           {activePage === "Overview" && <Overview backend={backend} />}
           {activePage === "Activity" && <ActivityPage backend={backend} />}
-          {activePage === "Workflows" && <WorkflowsPage backend={backend} />}
+          {activePage === "Workflows" && <WorkflowsPage backend={backend} requestedWorkflowId={voiceWorkflowId} />}
           {activePage === "Insights" && <InsightsPage backend={backend} />}
-          {activePage === "AI Assistant" && <AssistantPage backend={backend} />}
+          {activePage === "AI Assistant" && <AssistantPage backend={backend} onOpenWorkflowDraft={openWorkflowDraft} />}
           {activePage === "Settings" && <SettingsPage backend={backend} />}
         </div>
       </main>
