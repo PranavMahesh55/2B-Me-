@@ -63,10 +63,13 @@ function requestGrant(payload) {
         });
       },
     );
-    // A Touch ID prompt can sit there as long as the user takes.
-    request.setTimeout(120000, () => {
+    // A backstop only: the signer times its own prompt out at 60s and answers
+    // presence_cancelled. Reaching this means the signer itself is wedged, and
+    // presence_failed would be a lie -- it says "Touch ID didn't recognise you"
+    // when nothing was ever attempted.
+    request.setTimeout(180000, () => {
       request.destroy();
-      resolve({ ok: false, error: "presence_failed", message: "the signer did not respond" });
+      resolve({ ok: false, error: "signer_unavailable", message: "the signer did not respond" });
     });
     request.on("error", () => resolve({ ok: false, error: "signer_unavailable" }));
     request.end(body);
@@ -75,6 +78,9 @@ function requestGrant(payload) {
 
 const WINDOW_SIZES = {
   expanded: { width: 588, height: 682 },
+  // The consent card adds ~280px; without its own size the Touch ID button is
+  // clipped at the window edge.
+  authorizing: { width: 588, height: 860 },
   collapsed: { width: 588, height: 96 },
   dashboard: { width: 1220, height: 810 },
 };

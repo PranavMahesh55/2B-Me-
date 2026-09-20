@@ -1916,6 +1916,13 @@ input:focus-visible {
 
 
 /* Authorization consent card -- the Halo Strip's grant surface (§9 #4). */
+
+/* The capsule grid declares one column per child, so the pending-authorization
+   badge needs its own or it wraps onto an implicit row and collides with the
+   collapse button. */
+.overlay-capsule--intent {
+  grid-template-columns: auto 14px minmax(0, 1fr) auto 1px auto 36px 42px;
+}
 .capsule-intent {
   display: inline-flex;
   align-items: center;
@@ -1972,7 +1979,6 @@ input:focus-visible {
   padding: 4px 10px;
   font-size: 10.5px;
   font-weight: 600;
-  text-transform: capitalize;
   letter-spacing: 0.01em;
   white-space: nowrap;
   border: 1px solid currentColor;
@@ -2062,6 +2068,24 @@ input:focus-visible {
   display: flex;
   gap: 10px;
   margin-top: 2px;
+}
+
+.intent-actions button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+  height: 46px;
+  padding: 0 18px;
+  border-radius: 15px;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: transform 150ms ease, background 150ms ease;
+}
+
+.intent-actions button:active {
+  transform: translateY(1px);
 }
 
 .intent-actions .primary-action {

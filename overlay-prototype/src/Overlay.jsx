@@ -195,7 +195,7 @@ export function Overlay({ expanded, onExpandedChange, onOpenDashboard, onHide, b
         <div className="intent-heading">
           <span className="eyebrow eyebrow--lime">Authorization required</span>
           <span className={`risk-pill risk-pill--${risk}`}>
-            {risk} risk · expires in {formatDuration(grantSeconds)}
+            {risk[0].toUpperCase() + risk.slice(1)} risk · expires in {formatDuration(grantSeconds)}
           </span>
         </div>
 
@@ -262,7 +262,7 @@ export function Overlay({ expanded, onExpandedChange, onOpenDashboard, onHide, b
 
   return (
     <section className={expanded ? "overlay-shell is-expanded" : "overlay-shell"} aria-label="2B me desktop overlay">
-      <div className="overlay-capsule drag-region">
+      <div className={pendingIntent ? "overlay-capsule overlay-capsule--intent drag-region" : "overlay-capsule drag-region"}>
         <div className="capsule-brand">
           <Brand compact />
         </div>

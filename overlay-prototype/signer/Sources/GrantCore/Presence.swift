@@ -14,7 +14,13 @@ public enum Presence {
     ///
     /// The same LAContext is handed to the keychain lookup afterwards, so the
     /// signature does not raise a second prompt for one authorization.
-    public static func require(reason: String) throws -> PresenceResult {
+    /// The signer owns the timeout, not the caller.
+    ///
+    /// Without one, an untouched prompt sits open forever: the client gives up
+    /// and tells the user something wrong, the OS dialog stays on screen, a
+    /// later touch mints a token nobody collects, and -- worst -- the serial
+    /// grant queue stays blocked, so every subsequent request hangs behind it.
+    public static func require(reason: String, timeout: TimeInterval = 60) throws -> PresenceResult {
         let context = LAContext()
         context.localizedReason = reason
 
@@ -37,7 +43,13 @@ public enum Presence {
             failure = error
             semaphore.signal()
         }
-        semaphore.wait()
+
+        if semaphore.wait(timeout: .now() + timeout) == .timedOut {
+            // Closes the dialog and releases the queue. Nothing was attempted,
+            // so this is a cancellation, not a rejected fingerprint.
+            context.invalidate()
+            throw SignerError(.presenceCancelled, "no response within \(Int(timeout))s")
+        }
 
         guard succeeded else {
             throw EnclaveKeyManager.mapSigningFailure(failure)

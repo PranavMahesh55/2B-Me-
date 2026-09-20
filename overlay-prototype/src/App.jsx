@@ -17,11 +17,15 @@ export function App() {
   useEffect(() => {
     if (!backend.pendingIntent) return;
     setMode("overlay");
-    setExpanded((current) => {
-      if (!current) window.desktopAPI?.setMode("expanded");
-      return true;
-    });
+    setExpanded(true);
+    window.desktopAPI?.setMode("authorizing");
   }, [backend.pendingIntent]);
+
+  // Back to the normal height once nothing is waiting.
+  useEffect(() => {
+    if (backend.pendingIntent || mode !== "overlay") return;
+    window.desktopAPI?.setMode(expanded ? "expanded" : "collapsed");
+  }, [backend.pendingIntent, expanded, mode]);
 
   function notify(message) {
     setNotice(message);
