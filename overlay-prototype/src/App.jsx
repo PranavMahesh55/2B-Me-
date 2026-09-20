@@ -14,12 +14,16 @@ export function App() {
 
   // An authorization prompt the user cannot see is a dark pattern, and in the
   // desktop app the window has to be resized to show it at all.
+  //
+  // It must not drag the user out of the dashboard, though: the workflow
+  // builder creates the plan itself, so switching modes here would unmount the
+  // builder mid-flow and it could never reach its permissions step. The card is
+  // waiting in the overlay either way, and the builder drives the same grant.
   useEffect(() => {
-    if (!backend.pendingIntent) return;
-    setMode("overlay");
+    if (!backend.pendingIntent || mode !== "overlay") return;
     setExpanded(true);
     window.desktopAPI?.setMode("authorizing");
-  }, [backend.pendingIntent]);
+  }, [backend.pendingIntent, mode]);
 
   // Back to the normal height once nothing is waiting.
   useEffect(() => {

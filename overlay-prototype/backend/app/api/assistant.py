@@ -104,13 +104,23 @@ def ask(body: AssistantQuestion, db: Session = Depends(get_db)) -> dict:
             "model_version": runtime.model_config.version,
         }
 
-    workflow = db.scalar(
-        select(WorkflowDefinition).order_by(desc(WorkflowDefinition.automation_potential))
+    # WorkflowDefinition is global -- keyed by signature, with no session link --
+    # so the newest score and the strongest workflow can belong to different
+    # sessions. Only describe a repetition this score actually saw, or the answer
+    # can quote a repeat count that contradicts the evidence shown beneath it.
+    evidence = score.evidence or {}
+    observed_repeats = int(evidence.get("workflow_repeat_count", 0) or 0)
+    workflow = (
+        db.scalar(select(WorkflowDefinition).order_by(desc(WorkflowDefinition.automation_potential)))
+        if observed_repeats > 0
+        else None
     )
     context = ContextSanitizer().sanitize(
         {
             "name": workflow.name,
-            "repeat_count": workflow.repeat_count,
+            # From the score, not the workflow record: the two are updated by
+            # different passes and the answer must only quote what it displays.
+            "repeat_count": observed_repeats,
             "average_duration_s": workflow.average_duration_s,
         }
         if workflow
@@ -120,7 +130,7 @@ def ask(body: AssistantQuestion, db: Session = Depends(get_db)) -> dict:
             "focus": score.focus,
             "automation_potential": score.automation_potential,
             "confidence": score.confidence,
-            "evidence": score.evidence or {},
+            "evidence": evidence,
         },
     )
 

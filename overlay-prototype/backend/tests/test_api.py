@@ -301,3 +301,34 @@ def test_recorded_session_replays_into_a_fresh_store(tmp_path):
     # drift, NormalizedEvent validation fails here rather than in the field.
     result = replay(path)
     assert result["duplicates"] == written
+
+
+def test_assistant_never_quotes_a_repeat_count_its_grounding_does_not_show():
+    """WorkflowDefinition is global and has no session link, so the newest score
+    and the strongest workflow can come from different sessions. Pairing them
+    produced an answer that said "appeared 4 times" above a grounding panel
+    reading "workflow repeat count 0"."""
+    with TestClient(app) as client:
+        session = client.post(
+            "/api/sessions/start",
+            json={"title": "t", "workflow_type": "coding_debugging", "device_id": "device_local"},
+        ).json()
+        client.post(
+            "/api/events/batch",
+            json={"events": event_batch(session["id"], session["task_id"], prefix="consistency")},
+        )
+
+        reply = client.post(
+            "/api/assistant/ask",
+            json={"question": "What should I automate?", "session_id": session["id"]},
+        ).json()
+        grounding = reply["grounded_in"]
+        observed = int(grounding["evidence"].get("workflow_repeat_count", 0))
+
+        if observed:
+            assert grounding["workflow"]["repeat_count"] == observed
+            assert f"appeared {observed} times" in reply["answer"]
+        else:
+            # No repetition in the evidence means no repetition may be claimed.
+            assert "appeared" not in reply["answer"]
+            assert grounding["workflow"]["repeat_count"] == 0

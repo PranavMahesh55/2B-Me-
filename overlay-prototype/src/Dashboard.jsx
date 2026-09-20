@@ -25,6 +25,7 @@ import {
   WarningCircle,
   X,
 } from "@phosphor-icons/react";
+import { grantCopy } from "./grantCopy.js";
 import { Brand } from "./Overlay.jsx";
 import { trackingSources } from "./data.js";
 
@@ -133,7 +134,10 @@ function WorkflowBuilder({ workflow, backend, onClose }) {
       setResult(preview);
       setStage("test");
     } catch (caught) {
-      setError(caught.message || "The preview could not run.");
+      // Same copy the overlay's consent card uses for this code, rather than
+      // whatever developer string happened to come back.
+      const copy = caught.code ? grantCopy(caught.code) : null;
+      setError(copy ? `${copy.title} — ${copy.body}` : caught.message || "The preview could not run.");
     } finally {
       setBusy(false);
     }
@@ -517,6 +521,9 @@ function AssistantPage({ backend }) {
                 <details className="message-grounding">
                   <summary>What this is based on</summary>
                   <dl>
+                    {message.grounding.workflow?.repeat_count > 0 && (
+                      <div><dt>Repeats observed</dt><dd>{message.grounding.workflow.repeat_count}</dd></div>
+                    )}
                     {Object.entries(message.grounding.behavior).map(([key, value]) => (
                       <div key={key}><dt>{friendlyAction(key)}</dt><dd>{Math.round(value * 100)}</dd></div>
                     ))}
