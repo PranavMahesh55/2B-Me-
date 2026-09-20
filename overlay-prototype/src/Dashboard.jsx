@@ -467,28 +467,42 @@ function InsightsPage({ backend }) {
 
 function AssistantPage({ backend }) {
   const [question, setQuestion] = useState("");
+  const [pending, setPending] = useState(false);
   const [messages, setMessages] = useState([
     { role: "assistant", text: "Ask me about your work patterns, friction, repeated workflows, or what to automate." },
   ]);
 
-  function ask(event) {
+  async function ask(event) {
     event.preventDefault();
-    if (!question.trim()) return;
+    if (!question.trim() || pending) return;
     const userQuestion = question.trim();
-    const metrics = backend.metrics;
-    const workflow = backend.workflows[0];
-    const answer = !metrics?.has_live_data
-      ? "I’m waiting for the first local activity window. I won’t invent personal history while the backend is still collecting evidence."
-      : userQuestion.toLowerCase().includes("automat")
-        ? workflow
-          ? `${workflow.name} is the strongest current candidate. It has repeated ${workflow.repeat_count} times with ${Math.round(workflow.confidence * 100)}% confidence.`
-          : "No repeated sequence has crossed the workflow threshold yet."
-        : userQuestion.toLowerCase().includes("slow")
-          ? `Current friction is ${Math.round(metrics.friction * 100)}. The strongest evidence is ${Number(metrics.evidence?.app_switches_per_min || 0).toFixed(1)} app switches per minute.`
-          : `Current focus is ${Math.round(metrics.focus * 100)} with ${Math.round(metrics.confidence * 100)}% model confidence. This explanation uses scored local events, not raw content.`;
-    backend.client.track("navigation", "assistant_question", { windowContext: "ai_assistant", metadata: { category: userQuestion.toLowerCase().includes("automat") ? "automation" : userQuestion.toLowerCase().includes("slow") ? "friction" : "behavior" } });
-    setMessages((items) => [...items, { role: "user", text: userQuestion }, { role: "assistant", text: answer }]);
     setQuestion("");
+    setMessages((items) => [...items, { role: "user", text: userQuestion }]);
+    setPending(true);
+    try {
+      // The answer is composed on the backend from a sanitized context. It used
+      // to be built here by string-matching the question against raw metrics,
+      // which meant the explanation boundary the backend provides was never on
+      // the path the user actually took.
+      const reply = await backend.client.askAssistant(userQuestion);
+      backend.client.track("navigation", "assistant_question", {
+        windowContext: "ai_assistant",
+        metadata: { category: reply.category },
+      });
+      setMessages((items) => [...items, {
+        role: "assistant",
+        text: reply.answer,
+        grounding: reply.grounded_in,
+        modelVersion: reply.model_version,
+      }]);
+    } catch (caught) {
+      setMessages((items) => [...items, {
+        role: "assistant",
+        text: caught.message || "The local intelligence service could not answer that.",
+      }]);
+    } finally {
+      setPending(false);
+    }
   }
 
   return (
@@ -496,12 +510,30 @@ function AssistantPage({ backend }) {
       <section className="assistant-thread">
         <div className="assistant-intro"><Brain weight="fill" /><div><span className="section-label">Behavioral AI assistant</span><h2>Grounded in your activity—not guesses.</h2></div></div>
         <div className="message-list">
-          {messages.map((message, index) => <div key={`${message.role}-${index}`} className={`message message--${message.role}`}>{message.text}</div>)}
+          {messages.map((message, index) => (
+            <div key={`${message.role}-${index}`} className={`message message--${message.role}`}>
+              {message.text}
+              {message.grounding && (
+                <details className="message-grounding">
+                  <summary>What this is based on</summary>
+                  <dl>
+                    {Object.entries(message.grounding.behavior).map(([key, value]) => (
+                      <div key={key}><dt>{friendlyAction(key)}</dt><dd>{Math.round(value * 100)}</dd></div>
+                    ))}
+                    {Object.entries(message.grounding.evidence).map(([key, value]) => (
+                      <div key={key}><dt>{friendlyAction(key)}</dt><dd>{Number(value).toFixed(2)}</dd></div>
+                    ))}
+                  </dl>
+                  <small>Scored evidence only — no window titles, keystrokes or content. {message.modelVersion}</small>
+                </details>
+              )}
+            </div>
+          ))}
         </div>
         <div className="prompt-suggestions">
           {["What slowed me down today?", "What should I automate?", "When was I most focused?"].map((prompt) => <button key={prompt} type="button" onClick={() => setQuestion(prompt)}>{prompt}</button>)}
         </div>
-        <form className="assistant-input" onSubmit={ask}><input value={question} onChange={(event) => setQuestion(event.target.value)} placeholder="Ask about your behavior…" /><button type="submit"><ArrowRight /></button></form>
+        <form className="assistant-input" onSubmit={ask}><input value={question} onChange={(event) => setQuestion(event.target.value)} placeholder={pending ? "Thinking…" : "Ask about your behavior…"} disabled={pending} /><button type="submit" disabled={pending}><ArrowRight /></button></form>
       </section>
     </div>
   );

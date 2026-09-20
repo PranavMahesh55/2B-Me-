@@ -321,6 +321,18 @@ class BehaviorBackendClient {
   // grant. authorizeAndExecute() above is the replacement: it raises Touch ID,
   // gets an Enclave signature, and lets the broker verify before anything runs.
 
+  /**
+   * The assistant answers on the backend, where the sanitizer runs. Composing a
+   * reply here out of raw `state.metrics` would sidestep that boundary, so the
+   * privacy guarantee would only hold on a path nobody uses.
+   */
+  async askAssistant(question) {
+    return request("/api/assistant/ask", {
+      method: "POST",
+      body: JSON.stringify({ question, session_id: this.state.sessionId }),
+    });
+  }
+
   async sendFeedback(recommendationId, feedback, reason = null) {
     const result = await request(`/api/recommendations/${recommendationId}/feedback`, {
       method: "POST",

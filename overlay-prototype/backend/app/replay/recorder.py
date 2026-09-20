@@ -1,5 +1,14 @@
+"""The recording half of the record/replay loop.
+
+Writes a session's stored events in exactly the shape `replay.py` reads back, so
+`python -m backend.app.replay.recorder <session> --out f.jsonl` followed by
+`python -m backend.app.replay.replay f.jsonl` round-trips. The replayed copy is
+tagged `replay_observed` by the reader, so it never masquerades as live history.
+"""
+
 from __future__ import annotations
 
+import argparse
 import json
 from pathlib import Path
 
@@ -7,6 +16,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from backend.app.db.models import RawEvent
+from backend.app.db.session import SessionLocal, initialize_database
 
 
 def record_session(db: Session, session_id: str, output_path: Path) -> int:
@@ -40,3 +50,24 @@ def record_session(db: Session, session_id: str, output_path: Path) -> int:
             )
     return len(events)
 
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(description="Record a 2Bme session to normalized JSONL")
+    parser.add_argument("session_id")
+    parser.add_argument("--out", type=Path, required=True)
+    args = parser.parse_args()
+
+    initialize_database()
+    with SessionLocal() as db:
+        count = record_session(db, args.session_id, args.out)
+    print(
+        json.dumps(
+            {"session_id": args.session_id, "events": count, "path": str(args.out)},
+            indent=2,
+        )
+    )
+
+
+if __name__ == "__main__":
+    main()

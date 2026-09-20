@@ -115,5 +115,12 @@ class ExecuteInput(BaseModel):
     tamper: Literal["resource", "param", "exp", "sig"] | None = None
 
 
+class AssistantQuestion(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    question: str = Field(min_length=1, max_length=400)
+    session_id: str | None = None
+
+
 class PrivacyUpdate(BaseModel):
     enabled: bool

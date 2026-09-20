@@ -2491,3 +2491,57 @@ input:focus-visible {
 .intent-actions .primary-action[aria-busy="true"] {
   animation: intent-pulse 1.4s ease-in-out infinite;
 }
+
+
+/* Assistant grounding: AGENTS.md asks that behavioral conclusions stay
+   explainable, so every answer can show the scored evidence it came from. */
+.message-grounding {
+  margin-top: 10px;
+  border-top: 1px solid rgba(20, 43, 41, 0.12);
+  padding-top: 8px;
+}
+
+.message-grounding summary {
+  cursor: pointer;
+  font-size: 11.5px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  opacity: 0.75;
+}
+
+.message-grounding dl {
+  margin: 8px 0 6px;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 4px 16px;
+}
+
+.message-grounding dl > div {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  font-size: 11.5px;
+}
+
+.message-grounding dt {
+  opacity: 0.6;
+}
+
+.message-grounding dd {
+  margin: 0;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.message-grounding small {
+  display: block;
+  font-size: 10.5px;
+  opacity: 0.55;
+  line-height: 1.4;
+}
+
+.assistant-input input:disabled,
+.assistant-input button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}

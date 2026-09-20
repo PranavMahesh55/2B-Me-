@@ -5,10 +5,11 @@ from sqlalchemy import select
 
 from backend.app.db.models import RawEvent
 from backend.app.db.session import SessionLocal
+from backend.app.llm.privacy import ContextSanitizer
 from backend.app.main import app
 
 
-def event_batch(session_id: str, task_id: str) -> list[dict]:
+def event_batch(session_id: str, task_id: str, prefix: str = "test") -> list[dict]:
     started = datetime.now(UTC)
     sequence = [
         ("Jira", "open_ticket"),
@@ -20,7 +21,7 @@ def event_batch(session_id: str, task_id: str) -> list[dict]:
     for index, (application, action) in enumerate(sequence * 4):
         events.append(
             {
-                "event_id": f"evt_test_{index:03d}",
+                "event_id": f"evt_{prefix}_{index:03d}",
                 "timestamp": (started + timedelta(seconds=index * 4)).isoformat(),
                 "session_id": session_id,
                 "task_id": task_id,
@@ -228,3 +229,75 @@ def test_execute_surfaces_broker_error_codes(monkeypatch):
 
         denied = {item["event"] for item in client.get("/api/audit").json()}
         assert "permission_denied" in denied
+
+
+def test_assistant_refuses_to_invent_history_before_there_is_evidence():
+    with TestClient(app) as client:
+        reply = client.post(
+            "/api/assistant/ask",
+            json={"question": "What should I automate?", "session_id": "sess_never_observed"},
+        ).json()
+        assert reply["has_live_data"] is False
+        assert reply["grounded_in"] is None
+        assert "baseline" in reply["answer"].lower()
+
+
+def test_assistant_answers_from_sanitized_evidence_only():
+    with TestClient(app) as client:
+        session = client.post(
+            "/api/sessions/start",
+            json={"title": "t", "workflow_type": "coding_debugging", "device_id": "device_local"},
+        ).json()
+        client.post(
+            "/api/events/batch",
+            json={"events": event_batch(session["id"], session["task_id"], prefix="assistant")},
+        )
+
+        categories = {}
+        for question in ["What should I automate?", "What slowed me down?", "When was I most focused?"]:
+            reply = client.post("/api/assistant/ask", json={"question": question}).json()
+            assert reply["has_live_data"] is True
+            categories[reply["category"]] = reply
+
+        assert set(categories) == {"automation", "friction", "focus"}
+
+        grounding = categories["automation"]["grounded_in"]
+        # The whole point of the boundary: only scored aggregates cross it.
+        assert set(grounding) == {"workflow", "behavior", "evidence"}
+        assert set(grounding["evidence"]).issubset(ContextSanitizer.allowed_evidence)
+        rendered = str(grounding)
+        for leaked in [session["id"], session["task_id"], "device_local"]:
+            assert leaked not in rendered
+        # Note: workflow["name"] does cross the boundary, and detector-generated
+        # names are built from application names ("Jira -> Vs Code -> Terminal").
+        # Harmless for the local fallback; it would disclose the user's app stack
+        # to an external provider. Flagged rather than changed, because the name
+        # is what makes an explanation legible.
+
+        audit_types = {item["event"] for item in client.get("/api/audit").json()}
+        assert "assistant_answered" in audit_types
+
+
+def test_recorded_session_replays_into_a_fresh_store(tmp_path):
+    from backend.app.replay.recorder import record_session
+    from backend.app.replay.replay import replay
+
+    with TestClient(app) as client:
+        session = client.post(
+            "/api/sessions/start",
+            json={"title": "t", "workflow_type": "coding_debugging", "device_id": "device_local"},
+        ).json()
+        client.post(
+            "/api/events/batch",
+            json={"events": event_batch(session["id"], session["task_id"], prefix="replay")},
+        )
+
+    path = tmp_path / "session.jsonl"
+    with SessionLocal() as db:
+        written = record_session(db, session["id"], path)
+    assert written == 16
+
+    # The recorder writes exactly what the replayer reads; if the two halves ever
+    # drift, NormalizedEvent validation fails here rather than in the field.
+    result = replay(path)
+    assert result["duplicates"] == written

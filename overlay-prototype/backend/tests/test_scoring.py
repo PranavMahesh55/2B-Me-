@@ -95,3 +95,27 @@ def test_workflow_candidate_rejects_passive_repetition_and_counts_non_overlappin
     assert candidate is not None
     assert candidate[0] == tuple(trace)
     assert candidate[1] == 3
+
+
+def test_explainer_covers_every_recommendation_class_it_is_asked_for():
+    from backend.app.llm.adapter import get_explainer
+
+    context = ContextSanitizer().sanitize(
+        {"name": "Customer lookup", "repeat_count": 8, "average_duration_s": 92},
+        {
+            "friction": 0.61,
+            "focus": 0.55,
+            "automation_potential": 0.78,
+            "confidence": 0.88,
+            "evidence": {"app_switches_per_min": 4.2, "backtrack_rate": 0.5},
+        },
+    )
+    explainer = get_explainer()
+    titles = {
+        kind: explainer.explain(context, kind).title
+        for kind in ("automation", "workflow_consolidation", "friction_reduction")
+    }
+    # Every class the recommendations service can pick must get its own wording,
+    # or one of them silently falls back to the automation text.
+    assert len(set(titles.values())) == 3
+    assert all(explainer.explain(context, kind).confidence == 0.88 for kind in titles)
