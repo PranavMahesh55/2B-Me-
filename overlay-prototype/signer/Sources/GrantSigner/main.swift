@@ -31,6 +31,10 @@ func usage() -> Never {
           vectors [--count N] [--out PATH] [--regenerate]
               Sign N distinct payloads with the test key and write
               packages/grant/vectors/signatures.json (§6).
+
+          serve [--port N] [--role production|test] [--origin O]
+                [--secret-file PATH] [--debug]
+              Serve POST 127.0.0.1:8787/grant (§2).
         """)
     exit(2)
 }
@@ -41,6 +45,7 @@ let rest = Array(arguments.dropFirst())
 switch command {
 case "export-pubkey": runExportPubKey(rest)
 case "vectors": runVectors(rest)
+case "serve": runServe(rest)
 case "--help", "-h", "help": usage()
 default:
     FileHandle.standardError.write(Data("unknown command \(command)\n".utf8))

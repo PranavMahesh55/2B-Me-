@@ -183,8 +183,8 @@ public final class EnclaveKeyManager {
     /// keychain but makes it unusable, so lookup succeeds and signing fails. That
     /// is why this is decided here, at the signing failure, rather than from a
     /// persisted flag.
-    static func mapSigningFailure(_ error: CFError?) -> SignerError {
-        let nsError = error as Error? as NSError?
+    static func mapSigningFailure(_ error: Error?) -> SignerError {
+        let nsError = error as NSError?
         let code = nsError?.code ?? 0
         let detail = nsError?.localizedDescription ?? "unknown signing failure"
 
