@@ -43,6 +43,10 @@ def test_end_to_end_local_intelligence_loop():
         assert status.status_code == 200
         assert status.json()["local_only"] is True
         assert status.json()["seeded_baseline_sessions"] == 3000
+        privacy = client.get("/api/privacy").json()
+        assert privacy["window_titles"] is False
+        assert privacy["clipboard_metadata"] is False
+        assert privacy["visual_interpretation"] is False
 
         started = client.post(
             "/api/sessions/start",
@@ -50,6 +54,11 @@ def test_end_to_end_local_intelligence_loop():
         )
         assert started.status_code == 200
         session = started.json()
+        assert sum(
+            item["status"] == "active"
+            for item in client.get("/api/sessions?limit=100").json()
+            if item["device_id"] == "device_local"
+        ) == 1
 
         batch = client.post(
             "/api/events/batch",
@@ -67,6 +76,24 @@ def test_end_to_end_local_intelligence_loop():
         current = client.get("/api/metrics/current").json()
         assert current["session_id"] == session["id"]
         assert current["evidence"]["bootstrap_baseline_weight"] == 0.8
+
+        active = client.get(
+            "/api/sessions/active",
+            params={"device_id": "device_local", "workflow_type": "coding_debugging"},
+        )
+        assert active.status_code == 200
+        assert active.json()["id"] == session["id"]
+        assert active.json()["task_id"] == session["task_id"]
+
+        scoped_current = client.get(
+            "/api/metrics/current", params={"session_id": session["id"]}
+        ).json()
+        assert scoped_current["session_id"] == session["id"]
+        scoped_history = client.get(
+            "/api/metrics/history", params={"session_id": session["id"], "limit": 10}
+        ).json()
+        assert scoped_history
+        assert {item["session_id"] for item in scoped_history} == {session["id"]}
 
         workflows = client.get("/api/workflows").json()
         assert workflows
@@ -104,4 +131,3 @@ def test_websocket_reports_explicit_system_state():
             message = websocket.receive_json()
             assert message["type"] == "system_status"
             assert message["payload"]["status"] in {"READY", "COLLECTING"}
-

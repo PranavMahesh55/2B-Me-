@@ -72,10 +72,10 @@ export const insights = [
 export const trackingSources = [
   ["Application activity", true],
   ["Window switching", true],
+  ["Window titles", false],
   ["Browser tab activity", true],
   ["Keyboard timing", true],
   ["Clipboard events", false],
-  ["Terminal activity", true],
   ["Screen content", false],
   ["AI analysis", true],
 ];

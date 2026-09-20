@@ -37,8 +37,11 @@ def _score_payload(db: Session, score: BehaviorScore) -> dict:
 
 
 @router.get("/current")
-def current_metrics(db: Session = Depends(get_db)) -> dict:
-    score = db.scalar(select(BehaviorScore).order_by(desc(BehaviorScore.created_at)))
+def current_metrics(session_id: str | None = None, db: Session = Depends(get_db)) -> dict:
+    query = select(BehaviorScore)
+    if session_id:
+        query = query.where(BehaviorScore.session_id == session_id)
+    score = db.scalar(query.order_by(desc(BehaviorScore.created_at)))
     if score:
         return _score_payload(db, score)
     return {
@@ -60,9 +63,15 @@ def current_metrics(db: Session = Depends(get_db)) -> dict:
 
 
 @router.get("/history")
-def metric_history(limit: int = 60, db: Session = Depends(get_db)) -> list[dict]:
+def metric_history(
+    limit: int = 60,
+    session_id: str | None = None,
+    db: Session = Depends(get_db),
+) -> list[dict]:
+    query = select(BehaviorScore)
+    if session_id:
+        query = query.where(BehaviorScore.session_id == session_id)
     scores = db.scalars(
-        select(BehaviorScore).order_by(desc(BehaviorScore.created_at)).limit(min(limit, 240))
+        query.order_by(desc(BehaviorScore.created_at)).limit(min(limit, 240))
     ).all()
     return [_score_payload(db, score) for score in reversed(scores)]
-

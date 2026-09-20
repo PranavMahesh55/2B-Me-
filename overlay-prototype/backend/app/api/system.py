@@ -3,6 +3,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from backend.app.api.websocket import manager
+from backend.app.config.settings import settings
 from backend.app.db.models import PrivacySetting
 from backend.app.db.session import get_db
 from backend.app.ingestion.schemas import PrivacyUpdate
@@ -18,7 +19,7 @@ def system_status() -> dict:
         "status": runtime.status,
         "service": "2Bme local intelligence",
         "local_only": True,
-        "data_mode": "synthetic_bootstrap_baseline",
+        "data_mode": "synthetic_bootstrap_baseline" if settings.data_mode == "synthetic" else settings.data_mode,
         "seeded_baseline_sessions": runtime.seeded_sessions,
         "model_version": runtime.model_config.version,
         "websocket_clients": len(manager.connections),
@@ -56,4 +57,3 @@ def update_privacy(key: str, body: PrivacyUpdate, db: Session = Depends(get_db))
         setting.enabled = body.enabled
     db.commit()
     return {"key": key, "enabled": setting.enabled}
-

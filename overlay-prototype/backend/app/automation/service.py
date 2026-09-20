@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from time import perf_counter
 
+from sqlalchemy import desc, select
 from sqlalchemy.orm import Session
 
 from backend.app.audit.service import record_audit
@@ -18,14 +19,35 @@ ALLOWED_PERMISSIONS = {"open_application", "read_active_window", "draft_email"}
 
 
 def create_plan(db: Session, workflow: WorkflowDefinition) -> AutomationPlan:
+    existing = db.scalar(
+        select(AutomationPlan)
+        .where(
+            AutomationPlan.workflow_id == workflow.id,
+            AutomationPlan.status.in_(["awaiting_approval", "approved"]),
+        )
+        .order_by(desc(AutomationPlan.created_at))
+    )
+    if existing:
+        return existing
+
+    applications = list(
+        dict.fromkeys(
+            step.get("application")
+            for step in (workflow.steps or [])
+            if step.get("application")
+        )
+    )
     actions = [
-        {"type": "prepare_context", "workflow_id": workflow.id},
-        {"type": "draft_response", "destination": "preview_only"},
+        {"type": "open_application", "application": application}
+        for application in applications
     ]
+    actions.append({"type": "prepare_context", "workflow_id": workflow.id})
+    required_permissions = ["open_application"] if applications else []
+    required_permissions.append("read_active_window")
     plan = AutomationPlan(
         workflow_id=workflow.id,
         actions=actions,
-        required_permissions=["read_active_window", "draft_email"],
+        required_permissions=required_permissions,
         safety_level=1,
         status="awaiting_approval",
     )
@@ -85,4 +107,3 @@ def execute_plan(db: Session, plan: AutomationPlan) -> AutomationRun:
         payload=result,
     )
     return run
-
