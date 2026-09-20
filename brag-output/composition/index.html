@@ -1,0 +1,1294 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=1920, height=1080" />
+    <title>2Bme — The work you stopped noticing</title>
+    <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
+    <script src="assets/audio-data.js"></script>
+    <style>
+      @font-face {
+        font-family: "Inter";
+        font-style: normal;
+        font-weight: 400;
+        font-display: block;
+        src: url("assets/fonts/inter-400.woff2") format("woff2");
+      }
+      @font-face {
+        font-family: "Inter";
+        font-style: normal;
+        font-weight: 500;
+        font-display: block;
+        src: url("assets/fonts/inter-500.woff2") format("woff2");
+      }
+      @font-face {
+        font-family: "Inter";
+        font-style: normal;
+        font-weight: 600;
+        font-display: block;
+        src: url("assets/fonts/inter-600.woff2") format("woff2");
+      }
+      @font-face {
+        font-family: "Inter";
+        font-style: normal;
+        font-weight: 700;
+        font-display: block;
+        src: url("assets/fonts/inter-700.woff2") format("woff2");
+      }
+
+      /* Palette lifted verbatim from overlay-prototype/src/styles.css :root */
+      :root {
+        --deep: #102d2c;
+        --panel: #113735;
+        --lime: #c7f36b;
+        --lime-deep: #93bf3f;
+        --paper: #f5f7f6;
+        --muted: #70817f;
+        --teal: #54a99d;
+        --alert: #e8735f;
+      }
+
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+
+      html,
+      body {
+        width: 1920px;
+        height: 1080px;
+        overflow: hidden;
+        background: #0a1b1a;
+      }
+
+      #root {
+        position: relative;
+        width: 100%;
+        height: 100%;
+        overflow: hidden;
+        font-family: "Inter", sans-serif;
+        color: var(--paper);
+        background: #0a1b1a;
+      }
+
+      .clip {
+        position: absolute;
+        inset: 0;
+      }
+
+      /* ---------- Scene 1: the work you didn't notice ---------- */
+
+      #hook {
+        z-index: 2;
+      }
+
+      #hook-inner {
+        position: absolute;
+        inset: 0;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 34px;
+        background: radial-gradient(circle at 50% 42%, #143937 0%, #102d2c 46%, #0a1b1a 100%);
+      }
+
+      #hook-l1 {
+        display: block;
+        font-size: 74px;
+        font-weight: 600;
+        letter-spacing: -0.026em;
+        color: var(--paper);
+      }
+
+      #hook-l2 {
+        display: block;
+        font-size: 92px;
+        font-weight: 700;
+        letter-spacing: -0.034em;
+        color: var(--lime);
+      }
+
+      #hook-l2 sup {
+        font-size: 42px;
+        font-weight: 600;
+      }
+
+      /* ---------- Scenes 2-6: the desktop stage ---------- */
+
+      #app {
+        z-index: 1;
+      }
+
+      #app-inner {
+        position: absolute;
+        inset: 0;
+        opacity: 0;
+        background: radial-gradient(circle at 50% 12%, #163e3c 0%, #102d2c 48%, #0a1b1a 100%);
+      }
+
+      /* Out-of-focus application windows: the strip floats above your work,
+         so there has to be work underneath it. Blurred, never legible. */
+      .desk-window {
+        position: absolute;
+        display: flex;
+        flex-direction: column;
+        gap: 18px;
+        padding: 26px;
+        border-radius: 22px;
+        background: linear-gradient(160deg, rgba(84, 169, 157, 0.2), rgba(16, 45, 44, 0.42));
+        border: 1px solid rgba(245, 247, 246, 0.08);
+        filter: blur(9px);
+        opacity: 0.85;
+      }
+
+      .desk-bar {
+        display: flex;
+        gap: 10px;
+      }
+
+      .desk-bar i {
+        display: block;
+        width: 14px;
+        height: 14px;
+        border-radius: 50%;
+        background: rgba(245, 247, 246, 0.2);
+      }
+
+      .desk-line {
+        display: block;
+        height: 16px;
+        border-radius: 8px;
+        background: rgba(199, 243, 107, 0.12);
+      }
+
+      .desk-line--dim {
+        background: rgba(245, 247, 246, 0.08);
+      }
+
+      #desk-a {
+        left: 120px;
+        top: 300px;
+        width: 720px;
+        height: 640px;
+      }
+
+      #desk-b {
+        left: 1090px;
+        top: 370px;
+        width: 720px;
+        height: 520px;
+      }
+
+      #desk-c {
+        left: 620px;
+        top: 630px;
+        width: 700px;
+        height: 380px;
+        opacity: 0;
+      }
+
+      #stage {
+        position: absolute;
+        inset: 0;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        padding-top: 60px;
+        gap: 22px;
+      }
+
+      /* ---------- The Halo Strip capsule ---------- */
+
+      #capsule-wrap {
+        display: block;
+        width: 1240px;
+        height: 96px;
+      }
+
+      #capsule {
+        position: relative;
+        display: flex;
+        align-items: center;
+        gap: 20px;
+        width: 100%;
+        height: 100%;
+        padding: 0 24px;
+        border-radius: 24px;
+        background: linear-gradient(180deg, rgba(20, 60, 57, 0.98), rgba(16, 48, 46, 0.98));
+        border: 1px solid rgba(199, 243, 107, 0.16);
+        box-shadow: 0 26px 60px rgba(5, 18, 17, 0.6);
+      }
+
+      #cap-rim {
+        position: absolute;
+        inset: -1px;
+        border-radius: 25px;
+        border: 1px solid var(--lime);
+        opacity: 0.18;
+      }
+
+      .cap-brand {
+        font-size: 29px;
+        font-weight: 700;
+        letter-spacing: -0.03em;
+        color: var(--paper);
+      }
+
+      .cap-brand sup {
+        font-size: 14px;
+        font-weight: 600;
+        color: var(--lime);
+      }
+
+      #orb-wrap {
+        display: block;
+        width: 16px;
+        height: 16px;
+      }
+
+      #orb {
+        display: block;
+        width: 16px;
+        height: 16px;
+        border-radius: 50%;
+        background: var(--lime);
+      }
+
+      .cap-activity {
+        display: flex;
+        flex-direction: column;
+        gap: 3px;
+        min-width: 330px;
+      }
+
+      .cap-activity strong {
+        font-size: 26px;
+        font-weight: 600;
+        letter-spacing: -0.018em;
+      }
+
+      .cap-activity span {
+        font-size: 18px;
+        font-weight: 500;
+        color: #a0b0ad;
+      }
+
+      .cap-spacer {
+        flex: 1;
+      }
+
+      .cap-divider {
+        width: 1px;
+        height: 42px;
+        background: rgba(245, 247, 246, 0.1);
+      }
+
+      .cap-btn {
+        position: relative;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        height: 50px;
+        padding: 0 20px;
+        border-radius: 15px;
+        background: rgba(245, 247, 246, 0.06);
+        font-size: 20px;
+        font-weight: 600;
+        color: var(--paper);
+      }
+
+      .cap-btn svg {
+        width: 22px;
+        height: 22px;
+      }
+
+      .cap-btn--status {
+        color: var(--lime);
+      }
+
+      /* The real overlay swaps the microphone glyph for a waveform and the label
+         for "Listening", so this is one button with two faces that crossfade. */
+      #mic-btn {
+        width: 176px;
+        padding: 0;
+      }
+
+      .mic-face {
+        position: absolute;
+        inset: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 10px;
+        border-radius: 15px;
+      }
+
+      .mic-face svg {
+        width: 22px;
+        height: 22px;
+      }
+
+      #mic-listening {
+        background: rgba(199, 243, 107, 0.2);
+        border: 1px solid rgba(199, 243, 107, 0.55);
+        color: var(--lime);
+        opacity: 0;
+      }
+
+      .cap-dots {
+        display: flex;
+        gap: 5px;
+        padding: 0 6px;
+      }
+
+      .cap-dots i {
+        display: block;
+        width: 6px;
+        height: 6px;
+        border-radius: 50%;
+        background: rgba(245, 247, 246, 0.42);
+      }
+
+      /* ---------- The voice card ---------- */
+
+      #voice-card {
+        opacity: 0;
+        position: relative;
+        display: flex;
+        flex-direction: column;
+        gap: 13px;
+        width: 1240px;
+        padding: 24px 30px;
+        border-radius: 22px;
+        background: linear-gradient(180deg, rgba(17, 55, 53, 0.97), rgba(14, 44, 42, 0.97));
+        border: 1px solid rgba(199, 243, 107, 0.18);
+      }
+
+      .voice-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+      }
+
+      .voice-head-left {
+        display: flex;
+        align-items: baseline;
+        gap: 18px;
+      }
+
+      #voice-eyebrow {
+        display: block;
+        font-size: 19px;
+        font-weight: 700;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+        color: var(--lime);
+      }
+
+      .voice-state {
+        position: relative;
+        display: block;
+        height: 30px;
+        min-width: 620px;
+      }
+
+      .voice-state > span {
+        position: absolute;
+        left: 0;
+        top: 0;
+        display: block;
+        white-space: nowrap;
+        font-size: 23px;
+        font-weight: 600;
+        color: var(--paper);
+      }
+
+      #voice-state-response {
+        opacity: 0;
+      }
+
+      .voice-state sup {
+        font-size: 12px;
+        font-weight: 600;
+        color: var(--lime);
+      }
+
+      #voice-vendor {
+        display: flex;
+        align-items: center;
+        gap: 9px;
+        padding: 7px 16px;
+        border-radius: 999px;
+        background: rgba(245, 247, 246, 0.07);
+        font-size: 18px;
+        font-weight: 600;
+        color: #b4c6c2;
+      }
+
+      #voice-vendor i {
+        display: block;
+        width: 9px;
+        height: 9px;
+        border-radius: 50%;
+        background: var(--lime);
+      }
+
+      .voice-body {
+        position: relative;
+        height: 44px;
+      }
+
+      .voice-body > div {
+        position: absolute;
+        left: 0;
+        right: 0;
+        top: 0;
+        display: flex;
+        align-items: center;
+        gap: 14px;
+      }
+
+      #voice-live svg {
+        width: 28px;
+        height: 28px;
+        flex: none;
+      }
+
+      #voice-transcript {
+        font-size: 30px;
+        font-weight: 600;
+        color: var(--paper);
+      }
+
+      #voice-answer {
+        opacity: 0;
+      }
+
+      #voice-answer span {
+        font-size: 28px;
+        font-weight: 500;
+        letter-spacing: -0.012em;
+        color: #e4efe9;
+      }
+
+      #voice-foot {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        font-size: 20px;
+        font-weight: 500;
+        color: #a8b8b5;
+      }
+
+      #voice-foot svg {
+        width: 21px;
+        height: 21px;
+        flex: none;
+      }
+
+      /* ---------- The detected loop ---------- */
+
+      #loop-panel {
+        opacity: 0;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 10px;
+        width: 1240px;
+      }
+
+      #next-run {
+        opacity: 0;
+        display: block;
+        font-size: 19px;
+        font-weight: 700;
+        letter-spacing: 0.14em;
+        text-transform: uppercase;
+        color: var(--lime);
+      }
+
+      #chip-row {
+        display: flex;
+        align-items: center;
+        gap: 16px;
+      }
+
+      .chip {
+        opacity: 0;
+        position: relative;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 12px 24px;
+        border-radius: 15px;
+        background: rgba(84, 169, 157, 0.16);
+        border: 1px solid rgba(84, 169, 157, 0.36);
+        font-size: 26px;
+        font-weight: 600;
+        color: var(--paper);
+      }
+
+      .chip-label {
+        position: relative;
+        z-index: 1;
+      }
+
+      /* The "brought forward" state: the connector reports which applications it
+         opened, so each one confirms itself as it happens. */
+      .chip-done {
+        opacity: 0;
+        position: relative;
+        z-index: 1;
+        display: block;
+        width: 22px;
+        height: 22px;
+      }
+
+      .chip-lit {
+        opacity: 0;
+        position: absolute;
+        inset: -1px;
+        z-index: 0;
+        border-radius: 16px;
+        background: rgba(199, 243, 107, 0.3);
+        border: 1px solid var(--lime);
+        box-shadow: 0 0 22px rgba(199, 243, 107, 0.28);
+      }
+
+      .chip--bad {
+        background: rgba(232, 115, 95, 0.18);
+        border-color: rgba(232, 115, 95, 0.62);
+        color: #f6b9ac;
+      }
+
+      .arrow {
+        opacity: 0;
+        display: block;
+        width: 40px;
+        height: 2px;
+        background: rgba(84, 169, 157, 0.55);
+        transform-origin: left center;
+      }
+
+      /* ---------- The consent card ---------- */
+
+      #card {
+        opacity: 0;
+        position: relative;
+        width: 1240px;
+        padding: 28px 36px;
+        border-radius: 26px;
+        background: linear-gradient(180deg, rgba(17, 55, 53, 0.99), rgba(14, 44, 42, 0.99));
+        border: 1px solid rgba(199, 243, 107, 0.2);
+        box-shadow: 0 30px 70px rgba(5, 18, 17, 0.65);
+        display: flex;
+        flex-direction: column;
+        gap: 17px;
+      }
+
+      .card-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+      }
+
+      #card-eyebrow {
+        display: block;
+        font-size: 20px;
+        font-weight: 700;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+        color: var(--lime);
+      }
+
+      #card-risk {
+        display: block;
+        padding: 7px 17px;
+        border-radius: 999px;
+        background: rgba(232, 115, 95, 0.14);
+        font-size: 19px;
+        font-weight: 600;
+        color: #f09e8f;
+      }
+
+      #card-title {
+        display: block;
+        font-size: 40px;
+        font-weight: 700;
+        letter-spacing: -0.028em;
+        color: var(--paper);
+      }
+
+      .card-rows {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 11px 34px;
+      }
+
+      .crow {
+        display: flex;
+        align-items: baseline;
+        gap: 16px;
+        height: 44px;
+        padding: 0 18px;
+        border-radius: 13px;
+        background: rgba(245, 247, 246, 0.045);
+      }
+
+      .crow dt {
+        width: 190px;
+        font-size: 19px;
+        font-weight: 500;
+        color: #a8b8b5;
+      }
+
+      .crow dd {
+        position: relative;
+        font-size: 22px;
+        font-weight: 600;
+        color: var(--paper);
+      }
+
+      #bound-bad {
+        opacity: 0;
+        position: absolute;
+        left: 0;
+        top: 0;
+        white-space: nowrap;
+        color: #f09e8f;
+      }
+
+      #card-foot {
+        display: flex;
+        align-items: center;
+        gap: 11px;
+        font-size: 21px;
+        font-weight: 500;
+        color: #b4c6c2;
+      }
+
+      #card-foot svg {
+        width: 23px;
+        height: 23px;
+        flex: none;
+      }
+
+      /* One lane, two outcomes: the connector receipt, then the refusal. */
+      .result-lane {
+        position: relative;
+        height: 0;
+        overflow: hidden;
+      }
+
+      .result-lane > div {
+        position: absolute;
+        left: 0;
+        right: 0;
+        top: 0;
+        display: flex;
+        align-items: center;
+        gap: 16px;
+        height: 92px;
+        padding: 0 22px;
+        border-radius: 15px;
+      }
+
+      #receipt {
+        opacity: 0;
+        background: rgba(199, 243, 107, 0.11);
+        border: 1px solid rgba(199, 243, 107, 0.42);
+      }
+
+      #alert {
+        opacity: 0;
+        background: rgba(232, 115, 95, 0.14);
+        border: 1px solid rgba(232, 115, 95, 0.5);
+      }
+
+      .result-lane svg {
+        width: 29px;
+        height: 29px;
+        flex: none;
+      }
+
+      .lane-copy {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+      }
+
+      #receipt-line1 {
+        display: block;
+        font-size: 26px;
+        font-weight: 600;
+        color: #e7f8c5;
+      }
+
+      #receipt-line2 {
+        opacity: 0;
+        display: block;
+        font-size: 20px;
+        font-weight: 500;
+        letter-spacing: 0.02em;
+        color: #bcd394;
+      }
+
+      #alert-line1 {
+        display: block;
+        font-size: 29px;
+        font-weight: 700;
+        color: #f6b9ac;
+      }
+
+      #alert-line2 {
+        opacity: 0;
+        display: block;
+        font-size: 23px;
+        font-weight: 500;
+        color: #e6b3a7;
+      }
+
+      #card-actions {
+        display: flex;
+        align-items: center;
+        gap: 16px;
+      }
+
+      #authorize {
+        position: relative;
+        display: block;
+        height: 58px;
+        width: 392px;
+        border-radius: 15px;
+        background: var(--lime);
+        color: #10302e;
+        font-size: 23px;
+        font-weight: 700;
+      }
+
+      .auth-face {
+        position: absolute;
+        inset: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 12px;
+      }
+
+      .auth-face svg {
+        width: 27px;
+        height: 27px;
+      }
+
+      #auth-waiting,
+      #auth-done {
+        opacity: 0;
+      }
+
+      #auth-glow {
+        opacity: 0;
+        position: absolute;
+        inset: -8px;
+        border-radius: 21px;
+        border: 2px solid var(--lime);
+      }
+
+      .secondary {
+        display: block;
+        height: 58px;
+        padding: 16px 24px;
+        border-radius: 15px;
+        background: rgba(245, 247, 246, 0.06);
+        font-size: 21px;
+        font-weight: 600;
+        color: #b4c6c2;
+      }
+
+      /* ---------- Scene 7: the close ---------- */
+
+      #close {
+        z-index: 3;
+      }
+
+      #close-inner {
+        position: absolute;
+        inset: 0;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 24px;
+        background: radial-gradient(circle at 50% 46%, #143937 0%, #102d2c 46%, #0a1b1a 100%);
+      }
+
+      #close-mark {
+        display: block;
+        font-size: 100px;
+        font-weight: 700;
+        letter-spacing: -0.04em;
+        color: var(--paper);
+      }
+
+      #close-mark sup {
+        font-size: 44px;
+        font-weight: 600;
+        color: var(--lime);
+      }
+
+      #close-l1 {
+        display: block;
+        font-size: 50px;
+        font-weight: 600;
+        letter-spacing: -0.024em;
+        color: var(--lime);
+      }
+
+      #close-l2 {
+        display: block;
+        font-size: 38px;
+        font-weight: 500;
+        letter-spacing: -0.016em;
+        color: #b9cbc7;
+      }
+    </style>
+  </head>
+  <body>
+    <div
+      id="root"
+      data-composition-id="main"
+      data-start="0"
+      data-duration="31.2"
+      data-width="1920"
+      data-height="1080"
+    >
+      <!-- Scene 1: the work you didn't notice -->
+      <section id="hook" class="clip" data-start="0" data-duration="4.95" data-track-index="0">
+        <div id="hook-inner">
+          <span id="hook-l1">You did this six times this week.</span>
+          <span id="hook-l2">You didn&rsquo;t notice. 2B<sup>me</sup> did.</span>
+        </div>
+      </section>
+
+      <!-- Scenes 2-6: the strip, the voice answer, the consent card, the run, the refusal -->
+      <section id="app" class="clip" data-start="4.75" data-duration="22.9" data-track-index="1">
+        <div id="app-inner">
+          <div class="desk-window" id="desk-a">
+            <span class="desk-bar"><i></i><i></i><i></i></span>
+            <span class="desk-line" style="width: 62%"></span>
+            <span class="desk-line desk-line--dim" style="width: 88%"></span>
+            <span class="desk-line desk-line--dim" style="width: 74%"></span>
+            <span class="desk-line" style="width: 40%"></span>
+            <span class="desk-line desk-line--dim" style="width: 81%"></span>
+            <span class="desk-line desk-line--dim" style="width: 55%"></span>
+            <span class="desk-line" style="width: 68%"></span>
+          </div>
+          <div class="desk-window" id="desk-b">
+            <span class="desk-bar"><i></i><i></i><i></i></span>
+            <span class="desk-line desk-line--dim" style="width: 79%"></span>
+            <span class="desk-line" style="width: 52%"></span>
+            <span class="desk-line desk-line--dim" style="width: 86%"></span>
+            <span class="desk-line desk-line--dim" style="width: 63%"></span>
+            <span class="desk-line" style="width: 44%"></span>
+          </div>
+          <div class="desk-window" id="desk-c">
+            <span class="desk-bar"><i></i><i></i><i></i></span>
+            <span class="desk-line" style="width: 58%"></span>
+            <span class="desk-line desk-line--dim" style="width: 83%"></span>
+            <span class="desk-line desk-line--dim" style="width: 66%"></span>
+          </div>
+
+          <div id="stage">
+            <div id="capsule-wrap">
+              <div id="capsule">
+                <div id="cap-rim"></div>
+                <span class="cap-brand cap-item">2B<sup>me</sup></span>
+                <span id="orb-wrap" class="cap-item"><i id="orb"></i></span>
+                <span class="cap-activity cap-item">
+                  <strong>Reviewing pull request</strong>
+                  <span>Focused &middot; 14:32</span>
+                </span>
+                <span class="cap-spacer"></span>
+                <span class="cap-btn cap-item" id="mic-btn" data-layout-allow-overlap>
+                  <span class="mic-face" id="mic-idle">
+                    <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                      <path d="M12 3a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V6a3 3 0 0 0-3-3Z" />
+                      <path d="M18 11a1 1 0 1 0-2 0 4 4 0 0 1-8 0 1 1 0 1 0-2 0 6 6 0 0 0 5 5.9V19h-2a1 1 0 1 0 0 2h6a1 1 0 1 0 0-2h-2v-2.1A6 6 0 0 0 18 11Z" />
+                    </svg>
+                    <span>Ask</span>
+                  </span>
+                  <span class="mic-face" id="mic-listening">
+                    <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                      <path d="M2 11h2v2H2v-2Zm3.5-3h2v8h-2V8ZM9 4h2v16H9V4Zm3.5 3h2v10h-2V7ZM16 9h2v6h-2V9Zm3.5 2H22v2h-2.5v-2Z" />
+                    </svg>
+                    <span>Listening</span>
+                  </span>
+                </span>
+                <span class="cap-divider cap-item"></span>
+                <span class="cap-btn cap-btn--status cap-item">
+                  <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                    <path d="M3 12h3.2l2-5 3.6 11 2.4-7 1.6 3h5.2v2h-6.4l-1.2-2.3-2.6 7.6-3.5-10.7L7.6 14H3v-2Z" />
+                  </svg>
+                  <span>Active</span>
+                </span>
+                <span class="cap-dots cap-item"><i></i><i></i><i></i></span>
+              </div>
+            </div>
+
+            <!-- The voice layer. ElevenLabs is the transport; the answer is composed
+                 locally from the same SanitizedBehaviorContext the assistant uses,
+                 which is why the card can promise both things at once. -->
+            <div id="voice-card">
+              <div class="voice-head">
+                <span class="voice-head-left">
+                  <span id="voice-eyebrow">Voice presence</span>
+                  <span class="voice-state" data-layout-allow-overlap>
+                    <span id="voice-state-listening">Listening &mdash; release when you&rsquo;re done</span>
+                    <span id="voice-state-response">2B<sup>me</sup> response</span>
+                  </span>
+                </span>
+                <span id="voice-vendor"><i></i> ElevenLabs</span>
+              </div>
+
+              <div class="voice-body" data-layout-allow-overlap>
+                <div id="voice-live">
+                  <svg viewBox="0 0 24 24" fill="#c7f36b" aria-hidden="true">
+                    <path d="M2 11h2v2H2v-2Zm3.5-3h2v8h-2V8ZM9 4h2v16H9V4Zm3.5 3h2v10h-2V7ZM16 9h2v6h-2V9Zm3.5 2H22v2h-2.5v-2Z" />
+                  </svg>
+                  <span id="voice-transcript">&ldquo;What am I repeating?&rdquo;</span>
+                </div>
+                <div id="voice-answer">
+                  <span>The same sequence appeared 6 times. Automation potential 74, 87% confidence.</span>
+                </div>
+              </div>
+
+              <span id="voice-foot">
+                <svg viewBox="0 0 24 24" fill="#c7f36b" aria-hidden="true">
+                  <path d="M12 2 4 5.2v6.1c0 5 3.4 9.6 8 10.7 4.6-1.1 8-5.7 8-10.7V5.2L12 2Zm-1.2 14.2-3.4-3.4 1.5-1.5 1.9 1.9 4.8-4.8 1.5 1.5-6.3 6.3Z" />
+                </svg>
+                <span>Audio never stored &middot; answer grounded locally</span>
+              </span>
+            </div>
+
+            <div id="loop-panel">
+              <span id="next-run">Next run</span>
+              <div id="chip-row">
+                <span class="chip" id="chip-1">
+                  <span class="chip-lit"></span><span class="chip-label">Jira</span>
+                  <svg class="chip-done" viewBox="0 0 24 24" fill="#c7f36b" aria-hidden="true"><path d="M9.6 16.6 5 12l1.4-1.4 3.2 3.2 8-8L19 7.2l-9.4 9.4Z" /></svg>
+                </span>
+                <i class="arrow" id="arrow-1"></i>
+                <span class="chip" id="chip-2">
+                  <span class="chip-lit"></span><span class="chip-label">VS&nbsp;Code</span>
+                  <svg class="chip-done" viewBox="0 0 24 24" fill="#c7f36b" aria-hidden="true"><path d="M9.6 16.6 5 12l1.4-1.4 3.2 3.2 8-8L19 7.2l-9.4 9.4Z" /></svg>
+                </span>
+                <i class="arrow" id="arrow-2"></i>
+                <span class="chip" id="chip-3">
+                  <span class="chip-lit"></span><span class="chip-label">Terminal</span>
+                  <svg class="chip-done" viewBox="0 0 24 24" fill="#c7f36b" aria-hidden="true"><path d="M9.6 16.6 5 12l1.4-1.4 3.2 3.2 8-8L19 7.2l-9.4 9.4Z" /></svg>
+                </span>
+                <i class="arrow" id="arrow-3"></i>
+                <span class="chip chip--bad" id="chip-4"><span class="chip-label">Slack</span></span>
+              </div>
+            </div>
+
+            <div id="card">
+              <div class="card-head">
+                <span id="card-eyebrow">Authorization required</span>
+                <span id="card-risk">High risk &middot; expires in 0:58</span>
+              </div>
+
+              <span id="card-title">2B<sup>me</sup> wants to reproduce this workflow</span>
+
+              <dl class="card-rows">
+                <div class="crow" data-pair="1"><dt>Connector</dt><dd>desktop</dd></div>
+                <div class="crow" data-pair="1"><dt>Operation</dt><dd>reproduce</dd></div>
+                <div class="crow" data-pair="2"><dt>Resource</dt><dd>workflow.reproduce</dd></div>
+                <div class="crow" data-pair="2">
+                  <dt>Bound details</dt>
+                  <dd data-layout-allow-overlap>
+                    <span id="bound-ok">applications, order</span>
+                    <span id="bound-bad">applications, order, Slack</span>
+                  </dd>
+                </div>
+              </dl>
+
+              <div id="card-foot">
+                <svg viewBox="0 0 24 24" fill="#c7f36b" aria-hidden="true">
+                  <path d="M12 2 4 5.2v6.1c0 5 3.4 9.6 8 10.7 4.6-1.1 8-5.7 8-10.7V5.2L12 2Zm-1.2 14.2-3.4-3.4 1.5-1.5 1.9 1.9 4.8-4.8 1.5 1.5-6.3 6.3Z" />
+                </svg>
+                <span>Signed on this Mac by the Secure Enclave.</span>
+              </div>
+
+              <div class="result-lane" data-layout-allow-overlap>
+                <div id="receipt">
+                  <svg viewBox="0 0 24 24" fill="#c7f36b" aria-hidden="true">
+                    <path d="M9.6 16.6 5 12l1.4-1.4 3.2 3.2 8-8L19 7.2l-9.4 9.4Z" />
+                  </svg>
+                  <span class="lane-copy">
+                    <span id="receipt-line1">Reproduced 3 steps: launched Jira; brought VS Code, Terminal forward.</span>
+                    <span id="receipt-line2">written to the audit chain &middot; head oR1bembz&hellip;</span>
+                  </span>
+                </div>
+                <div id="alert">
+                  <svg viewBox="0 0 24 24" fill="#e8735f" aria-hidden="true">
+                    <path d="M12 2 1 21h22L12 2Zm1 14h-2v2h2v-2Zm0-7h-2v5h2V9Z" />
+                  </svg>
+                  <span class="lane-copy">
+                    <span id="alert-line1">The action carried details you never authorized</span>
+                    <span id="alert-line2">The broker refused it. Nothing ran.</span>
+                  </span>
+                </div>
+              </div>
+
+              <div id="card-actions">
+                <span id="authorize" data-layout-allow-overlap>
+                  <span id="auth-glow"></span>
+                  <span class="auth-face" id="auth-idle">
+                    <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                      <path d="M12 1.8c-2.5 0-4.8 1-6.4 2.6l1.1 1.1A7.5 7.5 0 0 1 12 3.3c2 0 3.9.8 5.3 2.2l1.1-1.1A9 9 0 0 0 12 1.8Zm0 3.4a5.6 5.6 0 0 0-5.6 5.6v3.4h1.6v-3.4a4 4 0 0 1 8 0v3.4c0 1.5-.3 3-.9 4.4l1.5.6c.7-1.6 1-3.3 1-5v-3.4A5.6 5.6 0 0 0 12 5.2Zm0 3a2.6 2.6 0 0 0-2.6 2.6v4c0 1.3-.2 2.5-.7 3.7l1.5.6c.5-1.4.8-2.8.8-4.3v-4a1 1 0 0 1 2 0v4c0 1.3-.1 2.6-.4 3.9l1.6.3c.3-1.4.4-2.8.4-4.2v-4A2.6 2.6 0 0 0 12 8.2Z" />
+                    </svg>
+                    <span>Authorize with Touch ID</span>
+                  </span>
+                  <span class="auth-face" id="auth-waiting">
+                    <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                      <path d="M12 1.8c-2.5 0-4.8 1-6.4 2.6l1.1 1.1A7.5 7.5 0 0 1 12 3.3c2 0 3.9.8 5.3 2.2l1.1-1.1A9 9 0 0 0 12 1.8Zm0 3.4a5.6 5.6 0 0 0-5.6 5.6v3.4h1.6v-3.4a4 4 0 0 1 8 0v3.4c0 1.5-.3 3-.9 4.4l1.5.6c.7-1.6 1-3.3 1-5v-3.4A5.6 5.6 0 0 0 12 5.2Zm0 3a2.6 2.6 0 0 0-2.6 2.6v4c0 1.3-.2 2.5-.7 3.7l1.5.6c.5-1.4.8-2.8.8-4.3v-4a1 1 0 0 1 2 0v4c0 1.3-.1 2.6-.4 3.9l1.6.3c.3-1.4.4-2.8.4-4.2v-4A2.6 2.6 0 0 0 12 8.2Z" />
+                    </svg>
+                    <span>Waiting for Touch ID&hellip;</span>
+                  </span>
+                  <span class="auth-face" id="auth-done">
+                    <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                      <path d="M9.6 16.6 5 12l1.4-1.4 3.2 3.2 8-8L19 7.2l-9.4 9.4Z" />
+                    </svg>
+                    <span>Authorized</span>
+                  </span>
+                </span>
+                <span class="secondary">Not now</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Scene 7: the close -->
+      <section id="close" class="clip" data-start="27.39" data-duration="3.81" data-track-index="2">
+        <div id="close-inner">
+          <span id="close-mark">2B<sup>me</sup></span>
+          <span id="close-l1">It finds the work you stopped noticing.</span>
+          <span id="close-l2">Then asks before it touches it.</span>
+        </div>
+      </section>
+
+      <!-- Music bed: quiet under the hook, dipped under the spoken answer, ducked
+           hard for the refusal, silent by the end. -->
+      <audio
+        id="music"
+        src="assets/music/music.mp3"
+        data-start="0"
+        data-duration="31.2"
+        data-track-index="10"
+        data-automation='{"version":1,"lanes":[{"target":"volume","points":[{"t":0,"v":0.16},{"t":1.2,"v":0.3},{"t":6.2,"v":0.3},{"t":6.7,"v":0.22},{"t":12.6,"v":0.22},{"t":13.6,"v":0.32},{"t":19.3,"v":0.34},{"t":23.4,"v":0.34},{"t":23.7,"v":0.11},{"t":26.6,"v":0.11},{"t":27.4,"v":0.18},{"t":28.4,"v":0.12},{"t":31.2,"v":0}]}]}'
+      ></audio>
+
+      <!-- SFX: motion-matched, sparse. Nothing at all under the closing lines. -->
+      <audio id="sfx-land" src="assets/sfx/land.ogg" data-start="5.28" data-volume="0.5" data-track-index="11"></audio>
+      <audio id="sfx-voice" src="assets/sfx/voice.ogg" data-start="6.34" data-volume="0.36" data-track-index="12"></audio>
+      <audio id="sfx-chip-1" src="assets/sfx/chip.ogg" data-start="9.5" data-volume="0.4" data-track-index="13"></audio>
+      <audio id="sfx-chip-2" src="assets/sfx/chip.ogg" data-start="10.01" data-volume="0.4" data-track-index="14"></audio>
+      <audio id="sfx-chip-3" src="assets/sfx/chip.ogg" data-start="10.54" data-volume="0.4" data-track-index="15"></audio>
+      <audio id="sfx-card" src="assets/sfx/card.ogg" data-start="14.22" data-volume="0.55" data-track-index="16"></audio>
+      <audio id="sfx-row-1" src="assets/sfx/row.ogg" data-start="15.81" data-volume="0.34" data-track-index="17"></audio>
+      <audio id="sfx-row-2" src="assets/sfx/row.ogg" data-start="16.34" data-volume="0.34" data-track-index="18"></audio>
+      <audio id="sfx-touch" src="assets/sfx/touch.ogg" data-start="18.96" data-volume="0.4" data-track-index="19"></audio>
+      <audio id="sfx-authorized" src="assets/sfx/authorized.ogg" data-start="19.49" data-volume="0.5" data-track-index="20"></audio>
+      <audio id="sfx-raise-2" src="assets/sfx/chip.ogg" data-start="20.02" data-volume="0.4" data-track-index="21"></audio>
+      <audio id="sfx-raise-3" src="assets/sfx/chip.ogg" data-start="20.54" data-volume="0.4" data-track-index="22"></audio>
+      <audio id="sfx-receipt" src="assets/sfx/receipt.ogg" data-start="21.07" data-volume="0.46" data-track-index="23"></audio>
+      <audio id="sfx-tamper" src="assets/sfx/tamper.ogg" data-start="23.7" data-volume="0.5" data-track-index="24"></audio>
+      <audio id="sfx-refuse" src="assets/sfx/refuse.ogg" data-start="24.75" data-volume="0.72" data-track-index="25"></audio>
+    </div>
+
+    <script>
+      const tl = gsap.timeline({ paused: true });
+
+      /* Every initial hidden state is authored in CSS above, not as a zero-duration
+         tl.set at 0 — a set at the playhead's own position does not render, so
+         frame 0 would flash the whole stage. The only thing the timeline reveals
+         from scratch is the loop panel's container. */
+      tl.set("#loop-panel", { opacity: 0 }, 0);
+
+      /* ---------------- Scene 1 — the work you didn't notice (0.00-4.95) ----------------
+         Nobody files a ticket to automate a thing they never noticed doing, so the
+         video names the blind spot before it names the product. */
+
+      tl.fromTo("#hook-l1", { opacity: 0, y: 26 }, { opacity: 1, y: 0, duration: 0.42, ease: "power3.out" }, 0.3);
+      // beat-grid: 2.65s — the answer lands on the pulse, the premise dims behind it
+      tl.to("#hook-l1", { opacity: 0.32, duration: 0.35, ease: "power2.out" }, 2.65);
+      tl.fromTo("#hook-l2", { opacity: 0, y: 22 }, { opacity: 1, y: 0, duration: 0.4, ease: "power3.out" }, 2.65);
+      tl.to("#hook-inner", { opacity: 0, duration: 0.25, ease: "power2.in" }, 4.75);
+
+      /* ---------------- Scene 2 — the strip (4.75-6.34) ---------------- */
+
+      tl.fromTo("#app-inner", { opacity: 0 }, { opacity: 1, duration: 0.3, ease: "power2.out" }, 4.75);
+      // beat-locked: 5.28s (strongCue 1.00) — the capsule lands on the downbeat
+      tl.fromTo(
+        "#capsule-wrap",
+        { opacity: 0, y: -130, scale: 0.96 },
+        { opacity: 1, y: 0, scale: 1, duration: 0.5, ease: "power3.out" },
+        5.28,
+      );
+      tl.fromTo(
+        ".cap-item",
+        { opacity: 0, y: 10 },
+        { opacity: 1, y: 0, duration: 0.26, stagger: 0.06, ease: "power2.out" },
+        5.6,
+      );
+
+      /* ---------------- Scene 3 — you ask it out loud (6.34-14.22) ----------------
+         The ElevenLabs layer. Electron mints a single-use transcription token and the
+         audio goes straight to ElevenLabs, so the backend never sees it; the answer
+         comes back out of the local sanitized context. Both halves are on the card. */
+
+      // beat-locked: 6.34s (strongCue 1.00) — the mic goes live and the card opens together
+      tl.to("#mic-idle", { opacity: 0, duration: 0.2 }, 6.34);
+      tl.to("#mic-listening", { opacity: 1, duration: 0.2 }, 6.34);
+      tl.fromTo("#voice-card", { opacity: 0, y: 24 }, { opacity: 1, y: 0, duration: 0.42, ease: "power3.out" }, 6.34);
+      tl.fromTo("#voice-transcript", { opacity: 0, y: 10 }, { opacity: 1, y: 0, duration: 0.32, ease: "power2.out" }, 6.86);
+
+      // beat-locked: 8.44s (strongCue 1.00) — release, and the answer takes the card over
+      tl.to("#mic-listening", { opacity: 0, duration: 0.2 }, 8.44);
+      tl.to("#mic-idle", { opacity: 1, duration: 0.2 }, 8.44);
+      tl.to("#voice-state-listening", { opacity: 0, duration: 0.22 }, 8.44);
+      tl.to("#voice-state-response", { opacity: 1, duration: 0.22 }, 8.44);
+      tl.to("#voice-live", { opacity: 0, duration: 0.24 }, 8.44);
+      tl.fromTo("#voice-answer", { opacity: 0, y: 12 }, { opacity: 1, y: 0, duration: 0.36, ease: "power3.out" }, 8.5);
+
+      // The answer claims a repeated sequence, so show the sequence it means.
+      // beat-grid: 9.50s / 10.01s / 10.54s — one chip per beat, short labels that stay up
+      tl.set("#loop-panel", { opacity: 1 }, 9.4);
+      tl.fromTo("#chip-1", { opacity: 0, y: 16, scale: 0.94 }, { opacity: 1, y: 0, scale: 1, duration: 0.32, ease: "back.out(1.4)" }, 9.5);
+      tl.fromTo("#arrow-1", { opacity: 0, scaleX: 0.15 }, { opacity: 1, scaleX: 1, duration: 0.2, ease: "power2.out" }, 9.82);
+      tl.fromTo("#chip-2", { opacity: 0, y: 16, scale: 0.94 }, { opacity: 1, y: 0, scale: 1, duration: 0.32, ease: "back.out(1.4)" }, 10.01);
+      tl.fromTo("#arrow-2", { opacity: 0, scaleX: 0.15 }, { opacity: 1, scaleX: 1, duration: 0.2, ease: "power2.out" }, 10.34);
+      tl.fromTo("#chip-3", { opacity: 0, y: 16, scale: 0.94 }, { opacity: 1, y: 0, scale: 1, duration: 0.32, ease: "back.out(1.4)" }, 10.54);
+
+      tl.fromTo("#voice-foot", { opacity: 0 }, { opacity: 1, duration: 0.36 }, 11.06);
+
+      /* ---------------- Scene 4 — the consent card (14.22-18.96) ---------------- */
+
+      // beat-locked: 14.22s (strongCue 1.00) — the card is the hinge of the whole video
+      tl.to("#voice-card", { opacity: 0.4, duration: 0.45, ease: "power2.out" }, 14.22);
+      tl.fromTo("#card", { opacity: 0, y: 80, scale: 0.975 }, { opacity: 1, y: 0, scale: 1, duration: 0.5, ease: "power3.out" }, 14.22);
+      tl.fromTo(["#card-eyebrow", "#card-risk"], { opacity: 0 }, { opacity: 1, duration: 0.28, stagger: 0.06 }, 14.5);
+      tl.fromTo("#card-title", { opacity: 0, y: 16 }, { opacity: 1, y: 0, duration: 0.36, ease: "power3.out" }, 14.76);
+
+      // beat-grid: row pair 1 at 15.81s, row pair 2 at 16.34s. Two pairs rather than
+      // four singles: at 115 BPM one row per beat would outrun reading.
+      tl.fromTo('.crow[data-pair="1"]', { opacity: 0, y: 12 }, { opacity: 1, y: 0, duration: 0.28, stagger: 0.06, ease: "power2.out" }, 15.81);
+      tl.fromTo('.crow[data-pair="2"]', { opacity: 0, y: 12 }, { opacity: 1, y: 0, duration: 0.28, stagger: 0.06, ease: "power2.out" }, 16.34);
+
+      // beat-locked: 16.86s (strongCue 1.00)
+      tl.fromTo("#card-foot", { opacity: 0, y: 10 }, { opacity: 1, y: 0, duration: 0.38, ease: "power2.out" }, 16.86);
+      // beat-locked: 17.91s (strongCue 1.00)
+      tl.fromTo("#card-actions", { opacity: 0, y: 14 }, { opacity: 1, y: 0, duration: 0.36, ease: "power3.out" }, 17.91);
+
+      /* ---------------- Scene 5 — it actually runs (18.96-23.70) ----------------
+         A grant that is never spent proves nothing, so the workflow has to visibly
+         reproduce: each application comes forward in the bound order, the desktop
+         behind it re-stacks, and the connector's own result string lands as a receipt. */
+
+      tl.to("#auth-idle", { opacity: 0, duration: 0.16 }, 18.96);
+      tl.to("#auth-waiting", { opacity: 1, duration: 0.16 }, 18.96);
+      tl.fromTo("#auth-glow", { opacity: 0, scale: 0.97 }, { opacity: 0.85, scale: 1.04, duration: 0.24, ease: "power2.out" }, 18.96);
+
+      // beat-locked: 19.49s (strongCue 1.00) — the authorization lands
+      tl.to("#auth-waiting", { opacity: 0, duration: 0.16 }, 19.49);
+      tl.to("#auth-done", { opacity: 1, duration: 0.16 }, 19.49);
+      tl.to("#auth-glow", { opacity: 0, duration: 0.4, ease: "power2.in" }, 19.62);
+
+      // beat-grid: 19.49 / 20.02 / 20.54 — one application raise per strong cue
+      var RAISES = [
+        ["#chip-1", 19.49, "#desk-b", 0.85],
+        ["#chip-2", 20.02, "#desk-a", 0.85],
+        ["#chip-3", 20.54, "#desk-c", 0],
+      ];
+      for (var r = 0; r < RAISES.length; r++) {
+        var chip = RAISES[r][0];
+        var at = RAISES[r][1];
+        var win = RAISES[r][2];
+        var fromOpacity = RAISES[r][3];
+        tl.fromTo(chip + " .chip-lit", { opacity: 0 }, { opacity: 1, duration: 0.24, ease: "power2.out" }, at);
+        tl.fromTo(chip, { scale: 1 }, { scale: 1.06, duration: 0.14, yoyo: true, repeat: 1, ease: "power2.inOut" }, at);
+        tl.fromTo(chip + " .chip-done", { opacity: 0, scale: 0.6 }, { opacity: 1, scale: 1, duration: 0.26, ease: "back.out(2)" }, at + 0.06);
+        tl.fromTo(win, { opacity: fromOpacity, y: 14 }, { opacity: 1, y: 0, duration: 0.34, ease: "power3.out" }, at);
+      }
+
+      // beat-grid: 21.07s — the connector's own result string, verbatim
+      tl.fromTo(".result-lane", { height: 0 }, { height: 92, duration: 0.3, ease: "power3.out" }, 21.07);
+      tl.fromTo("#receipt", { opacity: 0, y: 22 }, { opacity: 1, y: 0, duration: 0.3, ease: "power3.out" }, 21.07);
+      // beat-locked: 21.59s (strongCue 1.00)
+      tl.fromTo("#receipt-line2", { opacity: 0 }, { opacity: 1, duration: 0.3 }, 21.59);
+
+      /* ---------------- Scene 6 — the refusal (23.70-27.39) ---------------- */
+
+      // beat-locked: 23.70s (strongCue 1.00) — a fourth application, added after consent
+      tl.fromTo("#next-run", { opacity: 0, y: -8 }, { opacity: 1, y: 0, duration: 0.26, ease: "power2.out" }, 23.7);
+      tl.fromTo("#arrow-3", { opacity: 0, scaleX: 0.15 }, { opacity: 1, scaleX: 1, duration: 0.18, ease: "power2.out" }, 23.7);
+      tl.fromTo("#chip-4", { opacity: 0, y: -22, scale: 0.9 }, { opacity: 1, y: 0, scale: 1, duration: 0.3, ease: "back.out(2)" }, 23.78);
+      // beat-locked: 24.23s (strongCue 1.00)
+      tl.to("#bound-ok", { opacity: 0, duration: 0.18 }, 24.23);
+      tl.to("#bound-bad", { opacity: 1, duration: 0.18 }, 24.23);
+
+      // The same lane, the other outcome. One hard move, then nothing.
+      tl.to("#receipt", { opacity: 0, y: -20, duration: 0.22, ease: "power2.in" }, 24.75);
+      tl.fromTo("#alert", { opacity: 0, y: 26 }, { opacity: 1, y: 0, duration: 0.26, ease: "power4.out" }, 24.75);
+      tl.to("#card-actions", { opacity: 0.26, duration: 0.35, ease: "power2.out" }, 24.75);
+      // beat-grid: 25.29s
+      tl.fromTo("#alert-line2", { opacity: 0, y: 10 }, { opacity: 1, y: 0, duration: 0.3, ease: "power2.out" }, 25.29);
+
+      tl.to("#app-inner", { opacity: 0, duration: 0.3, ease: "power2.in" }, 27.39);
+
+      /* ---------------- Scene 7 — the close (27.39-31.20) ---------------- */
+
+      // beat-locked: 27.91s (strongCue 1.00)
+      tl.fromTo("#close-mark", { opacity: 0, y: 18, scale: 0.98 }, { opacity: 1, y: 0, scale: 1, duration: 0.48, ease: "power3.out" }, 27.91);
+      tl.fromTo("#close-l1", { opacity: 0, y: 14 }, { opacity: 1, y: 0, duration: 0.44, ease: "power3.out" }, 28.43);
+      // beat-locked: 28.97s (strongCue 1.00)
+      tl.fromTo("#close-l2", { opacity: 0, y: 12 }, { opacity: 1, y: 0, duration: 0.42, ease: "power3.out" }, 28.97);
+
+      /* ---------------- Audio-reactive: the live orb, and nothing else ----------------
+         Per-frame sampling of the pre-extracted bands. Bass drives the orb's scale and
+         glow; overall RMS drives the capsule's lime rim. Both stay inside a few percent
+         — this is a security product, not a music video. */
+
+      var AUDIO = window.AUDIO_DATA;
+      if (AUDIO && AUDIO.frames && AUDIO.frames.length) {
+        var orb = document.getElementById("orb");
+        var rim = document.getElementById("cap-rim");
+        var frameCount = Math.min(AUDIO.totalFrames, Math.floor(31.2 * AUDIO.fps));
+
+        for (var f = 0; f < frameCount; f++) {
+          var data = AUDIO.frames[f];
+          tl.call(
+            (function (bass, rms) {
+              return function () {
+                var glow = 10 + bass * 26;
+                gsap.set(orb, {
+                  scale: 1 + bass * 0.22,
+                  boxShadow: "0 0 " + glow.toFixed(1) + "px rgba(199, 243, 107, " + (0.35 + bass * 0.45).toFixed(3) + ")",
+                });
+                gsap.set(rim, { opacity: 0.12 + rms * 0.16 });
+              };
+            })(data.bands[0], data.rms),
+            [],
+            f / AUDIO.fps,
+          );
+        }
+      }
+
+      window.__timelines["main"] = tl;
+      tl.seek(0);
+    </script>
+  </body>
+</html>

@@ -1,0 +1,3 @@
+You don't file a ticket to automate the four-minute app shuffle you run six times a week, because you never noticed doing it. 2Bᵐᵉ notices it locally, tells you out loud when you ask, and then reproduces it — but only after Touch ID signs the exact plan you saw.
+
+Change one step afterwards and a separate process refuses the whole thing. Nothing ran.
