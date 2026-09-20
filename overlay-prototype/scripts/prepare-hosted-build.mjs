@@ -25,4 +25,9 @@ for (const file of ["brag.mp4", "brag.jpg"]) {
   copyFileSync(from, path.join(out, file));
 }
 
-console.log("Prepared hosted build: dist-hosted/ with brag.mp4 and brag.jpg");
+// Deploy config travels with the bundle, so `vercel deploy dist-hosted` is the
+// whole command -- no project settings to remember or re-enter.
+const vercelConfig = path.join(root, "vercel.json");
+if (existsSync(vercelConfig)) copyFileSync(vercelConfig, path.join(out, "vercel.json"));
+
+console.log("Prepared hosted build: dist-hosted/ with brag.mp4, brag.jpg and vercel.json");
