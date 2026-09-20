@@ -1,0 +1,5 @@
+#!/bin/sh
+set -eu
+here=$(cd "$(dirname "$0")/.." && pwd)
+swift build -c release --package-path "$here"
+echo "built $here/.build/release/input-counter"

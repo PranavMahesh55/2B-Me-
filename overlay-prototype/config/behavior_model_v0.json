@@ -50,6 +50,10 @@
     "time_spent_s": {
       "min": 60.0,
       "max": 2400.0
+    },
+    "keystrokes_per_min": {
+      "min": 0.0,
+      "max": 220.0
     }
   },
   "weights": {
@@ -64,12 +68,13 @@
       "sequence_entropy": 0.06
     },
     "focus": {
-      "inverse_app_switching": 0.22,
-      "inverse_idle_fragmentation": 0.16,
-      "navigation_efficiency": 0.18,
-      "inverse_sequence_entropy": 0.15,
-      "inverse_backtracking": 0.11,
-      "sustained_active_ratio": 0.18
+      "inverse_app_switching": 0.18,
+      "inverse_idle_fragmentation": 0.13,
+      "navigation_efficiency": 0.15,
+      "inverse_sequence_entropy": 0.12,
+      "inverse_backtracking": 0.09,
+      "sustained_active_ratio": 0.15,
+      "keystroke_momentum": 0.18
     },
     "automation": {
       "repeated_action_ratio": 0.25,

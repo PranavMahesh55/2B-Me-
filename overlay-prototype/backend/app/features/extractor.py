@@ -77,6 +77,7 @@ def extract_features(
             "duration_over_baseline": 0.0,
             "completion_success": False,
             "sustained_active_ratio": 1.0,
+            "keystrokes_per_min": 0.0,
             "tokens": [],
             "workflow_tokens": [],
         }
@@ -140,8 +141,17 @@ def extract_features(
         for event in ordered
     )
 
+    # Typing volume, from CGEventSource counters the collector diffs between
+    # samples. metadata holds counts only -- no keycodes, no characters.
+    keystrokes = sum(
+        int((event.metadata_json or {}).get("keys", 0) or 0)
+        for event in ordered
+        if event.event_type == "keyboard_activity"
+    )
+
     return {
         "duration_s": round(duration_s, 4),
+        "keystrokes_per_min": round(keystrokes / max(duration_s / 60, 1 / 60), 4),
         "app_switches_per_min": round(app_switches / max(duration_s / 60, 1 / 60), 4),
         "backtrack_rate": round(_ratio(backtracks, max(1, len(transitions))), 4),
         "repeated_action_ratio": round(_ratio(repeated_actions, len(tokens)), 4),

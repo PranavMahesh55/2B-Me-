@@ -57,6 +57,7 @@ class ScoringEngine:
         predictability = normalized.get("predictable_sequence_score", 0.0)
         time_spent = self.normalize("time_spent_s", float(features.get("duration_s", 0.0)))
         sustained = clamp(float(features.get("sustained_active_ratio", 1.0)))
+        keystroke_momentum = normalized.get("keystrokes_per_min", 0.0)
 
         fw = self.config.weights["friction"]
         friction = (
@@ -78,6 +79,9 @@ class ScoringEngine:
             + fow["inverse_sequence_entropy"] * (1 - sequence_entropy)
             + fow["inverse_backtracking"] * (1 - backtracking)
             + fow["sustained_active_ratio"] * sustained
+            # Typing volume is momentum: a session where the user is actually
+            # producing reads differently from one that is merely not switching.
+            + fow["keystroke_momentum"] * keystroke_momentum
         )
 
         aw = self.config.weights["automation"]
@@ -129,6 +133,7 @@ class ScoringEngine:
                 "backtrack_rate": float(features.get("backtrack_rate", 0.0)),
                 "repeated_action_ratio": float(features.get("repeated_action_ratio", 0.0)),
                 "workflow_repeat_count": raw_repeat_count,
+                "keystrokes_per_min": round(float(features.get("keystrokes_per_min", 0.0)), 2),
                 "predictable_sequence_score": float(features.get("predictable_sequence_score", 0.0)),
                 "model_version": self.config.version,
             },

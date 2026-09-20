@@ -21,6 +21,7 @@ class ContextSanitizer:
         "workflow_repeat_count",
         "predictable_sequence_score",
         "observed_task_count",
+        "keystrokes_per_min",
     }
 
     def sanitize(self, workflow: dict | None, score: dict) -> SanitizedBehaviorContext:

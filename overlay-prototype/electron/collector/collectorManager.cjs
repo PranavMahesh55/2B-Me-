@@ -15,6 +15,8 @@ const EXCLUDED_APPLICATIONS = [
   /wallet/i,
 ];
 
+const INPUT_COUNTER = path.join(__dirname, "..", "..", "collector", ".build", "release", "input-counter");
+
 class CollectorManager {
   constructor({ backendUrl, queueDirectory }) {
     this.backendUrl = backendUrl;
@@ -23,6 +25,9 @@ class CollectorManager {
     this.session = null;
     this.lastWindow = null;
     this.lastTransitionAt = Date.now();
+    // Monotonic input counters from the previous sample. Only differences are
+    // ever recorded, so this holds a rate and never any content.
+    this.lastCounts = null;
     this.privacy = {};
     this.status = "STARTING";
     this.sampleTimer = null;
@@ -110,10 +115,48 @@ class CollectorManager {
         }));
         this.lastTransitionAt = now;
       }
+      await this.sampleInput(now, application);
       if (this.queue.length >= 100) await this.flush();
     } catch {
       // The collector remains optional when the OS cannot report an active window.
     }
+  }
+
+  /**
+   * keyboard_timing has been true in DEFAULT_PRIVACY since the beginning, but
+   * nothing collected it. This reads CGEventSource counters -- totals since
+   * boot, not an event tap -- so it needs no Accessibility permission and can
+   * only ever produce a rate. No keycodes, no characters, no target app.
+   */
+  async sampleInput(now, application) {
+    if (this.privacy.keyboard_timing === false) return;
+    let counts;
+    try {
+      const { stdout } = await execFileAsync(INPUT_COUNTER, [], { timeout: 1000 });
+      counts = JSON.parse(stdout);
+    } catch {
+      return; // The helper is optional; app tracking continues without it.
+    }
+
+    const previous = this.lastCounts;
+    this.lastCounts = { ...counts, at: now };
+    if (!previous) return;
+
+    const elapsedMs = Math.max(1, now - previous.at);
+    const keys = Math.max(0, counts.keys - previous.keys);
+    const clicks = Math.max(0, counts.clicks - previous.clicks);
+    const scrolls = Math.max(0, counts.scrolls - previous.scrolls);
+    if (!keys && !clicks && !scrolls) return;
+
+    this.queue.push(normalizedEvent({
+      sessionId: this.session.id,
+      taskId: this.session.task_id,
+      application,
+      eventType: "keyboard_activity",
+      action: "input_burst",
+      durationMs: elapsedMs,
+      metadata: { keys, clicks, scrolls, idle_s: counts.idle_s },
+    }));
   }
 
   async flush() {
