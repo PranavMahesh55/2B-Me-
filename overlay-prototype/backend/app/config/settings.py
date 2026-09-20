@@ -21,7 +21,7 @@ class Settings:
     model_path: Path = Path(
         os.getenv(
             "BEHAVIOR_MODEL_PATH",
-            str(PROJECT_ROOT / "config" / "behavior_model_v0.synthetic.json"),
+            str(PROJECT_ROOT / "config" / "behavior_model_v0.json"),
         )
     )
     synthetic_data_path: Path = Path(

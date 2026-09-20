@@ -70,7 +70,7 @@ def test_end_to_end_local_intelligence_loop():
         assert metrics["accepted"] == 16
         assert metrics["has_live_data"] is True
         assert metrics["data_origin"] == "live_observed"
-        assert metrics["model_version"] == "behavior-model-v0.1-synthetic-bootstrap"
+        assert metrics["model_version"] == "behavior-model-v0.1"
         assert 0 <= metrics["friction"] <= 1
         assert 0 <= metrics["focus"] <= 1
 
@@ -332,3 +332,67 @@ def test_assistant_never_quotes_a_repeat_count_its_grounding_does_not_show():
             # No repetition in the evidence means no repetition may be claimed.
             assert "appeared" not in reply["answer"]
             assert grounding["workflow"]["repeat_count"] == 0
+
+
+def test_rhythm_is_windowed_where_history_is_cumulative():
+    """The 60-minute rhythm chart was a flat line because /metrics/history is
+    not a rhythm: every BehaviorScore re-aggregates the whole session, so 60
+    stored points can hold a single distinct focus value. /metrics/rhythm scores
+    a trailing window at each step instead."""
+    from datetime import UTC, datetime, timedelta
+
+    with TestClient(app) as client:
+        session = client.post(
+            "/api/sessions/start",
+            json={"title": "t", "workflow_type": "coding_debugging", "device_id": "device_rhythm"},
+        ).json()
+
+        # An hour alternating between calm and fragmented stretches.
+        start = datetime.now(UTC) - timedelta(hours=1)
+        applications = ["VS Code", "Terminal", "Chrome", "Slack", "Jira"]
+        events = []
+        moment = start
+        index = 0
+        for phase, per_minute in enumerate([0.6, 3.4, 0.8, 4.6, 1.0, 2.4]):
+            phase_end = start + timedelta(minutes=10 * (phase + 1))
+            gap = timedelta(seconds=60 / per_minute)
+            while moment < phase_end:
+                events.append({
+                    "event_id": f"evt_rhythm_{index:04d}",
+                    "timestamp": moment.isoformat(),
+                    "session_id": session["id"],
+                    "task_id": session["task_id"],
+                    "device_id": "device_rhythm",
+                    "application": applications[index % len(applications)],
+                    "window_context": "work",
+                    "event_type": "application_transition",
+                    "action": "focus",
+                    "duration_ms": int(gap.total_seconds() * 1000),
+                    "metadata": {},
+                    "data_origin": "live_observed",
+                })
+                moment += gap
+                index += 1
+        for offset in range(0, len(events), 100):
+            client.post("/api/events/batch", json={"events": events[offset : offset + 100]})
+
+        rhythm = client.get(
+            "/api/metrics/rhythm", params={"session_id": session["id"], "points": 36}
+        ).json()
+        assert rhythm["session_id"] == session["id"]
+        assert len(rhythm["points"]) >= 20
+
+        windowed = {round(point["focus"], 3) for point in rhythm["points"]}
+        history = client.get(
+            "/api/metrics/history", params={"session_id": session["id"], "limit": 60}
+        ).json()
+        cumulative = {round(item["focus"], 3) for item in history}
+
+        assert len(windowed) > len(cumulative), (
+            f"rhythm should vary more than history: {len(windowed)} vs {len(cumulative)}"
+        )
+        assert len(windowed) >= 4, "a 60-minute rhythm with six density phases should not be flat"
+
+        # Each point is a measurement over several events, not one transition.
+        assert min(point["events"] for point in rhythm["points"]) >= 2
+        assert rhythm["points"][0]["minutes_ago"] > rhythm["points"][-1]["minutes_ago"]

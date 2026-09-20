@@ -349,7 +349,7 @@ function ActivityPage({ backend }) {
         <div className="segmented-control" aria-label="Activity range">
           {["Today", "Yesterday", "Week"].map((item) => <button key={item} type="button" className={range === item ? "is-selected" : ""} onClick={() => setRange(item)}>{item}</button>)}
         </div>
-        <span className="illustrative-label">Live local activity</span>
+        <span className="activity-label">Live local activity</span>
       </div>
       <section className="dashboard-card timeline-card">
         <div className="card-heading">
@@ -447,7 +447,7 @@ function InsightsPage({ backend }) {
       kind: "Local intelligence",
       title: "Waiting for observed activity",
       body: "Insights will appear after privacy-safe events are scored locally.",
-      evidence: "No personal history is being simulated.",
+      evidence: "Waiting for the first observed activity window.",
       priority: "Starting",
     }];
   }, [backend.metrics, backend.recommendations]);

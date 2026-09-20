@@ -64,7 +64,7 @@ export function App() {
   return (
     <div className={isNative ? `app app--native app--${mode}` : `app app--preview app--${mode}`}>
       {!isNative && <div className="desktop-backdrop" aria-hidden="true" />}
-      <div className={mode === "overlay" ? "prototype-stage prototype-stage--overlay" : "prototype-stage prototype-stage--dashboard"}>
+      <div className={mode === "overlay" ? "app-stage app-stage--overlay" : "app-stage app-stage--dashboard"}>
         {mode === "overlay" ? (
           <Overlay
             expanded={expanded}
@@ -78,12 +78,6 @@ export function App() {
         )}
       </div>
       {notice && <div className="toast" role="status"><CheckCircle weight="fill" /> {notice}</div>}
-      {!isNative && mode === "overlay" && (
-        <div className="preview-caption">
-          <span>Desktop overlay prototype</span>
-          <small>The application underneath remains interactive in the native build.</small>
-        </div>
-      )}
     </div>
   );
 }

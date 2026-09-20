@@ -178,7 +178,7 @@ async function startBackend() {
       env: {
         ...process.env,
         BEHAVIOR_DATA_MODE: process.env.BEHAVIOR_DATA_MODE || "synthetic",
-        BEHAVIOR_MODEL_PATH: process.env.BEHAVIOR_MODEL_PATH || path.join(projectRoot, "config", "behavior_model_v0.synthetic.json"),
+        BEHAVIOR_MODEL_PATH: process.env.BEHAVIOR_MODEL_PATH || path.join(projectRoot, "config", "behavior_model_v0.json"),
       },
       stdio: process.env.NODE_ENV === "development" ? "inherit" : "ignore",
     },

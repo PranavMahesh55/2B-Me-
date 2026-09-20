@@ -25,6 +25,7 @@ import {
   CartesianGrid,
   ResponsiveContainer,
   XAxis,
+  YAxis,
 } from "recharts";
 import { rhythmData } from "./data.js";
 import { grantCopy } from "./grantCopy.js";
@@ -45,6 +46,20 @@ function Brand({ compact = false }) {
     <div className={compact ? "brand brand--compact" : "brand"} aria-label="2B me">
       <span>2B</span><sup>me</sup>
     </div>
+  );
+}
+
+function NowDot({ cx, cy, index, pointCount }) {
+  if (cx == null || cy == null || index !== pointCount - 1) return null;
+  return (
+    <g>
+      <circle cx={cx} cy={cy} r="9" fill="#c7f36b" opacity="0.16" />
+      <circle cx={cx} cy={cy} r="3.5" fill="#c7f36b" />
+      <circle cx={cx} cy={cy} r="3.5" fill="none" stroke="#c7f36b" strokeWidth="1.5">
+        <animate attributeName="r" values="3.5;14" dur="2.1s" repeatCount="indefinite" />
+        <animate attributeName="opacity" values="0.75;0" dur="2.1s" repeatCount="indefinite" />
+      </circle>
+    </g>
   );
 }
 
@@ -75,12 +90,32 @@ export function Overlay({ expanded, onExpandedChange, onOpenDashboard, onHide, b
   const focusScore = liveMetrics ? Math.round(liveMetrics.focus * 100) : 0;
   const activityTitle = liveMetrics?.session_title || "Waiting for observed activity";
   const appSwitches = Number(liveMetrics?.evidence?.app_switches_per_min || 0);
-  const rhythm = backend?.metricHistory?.length > 1
-    ? backend.metricHistory.slice(-8).map((item, index) => ({
-        time: index === backend.metricHistory.slice(-8).length - 1 ? "Now" : `${index + 1}`,
-        value: Math.round(item.focus * 100),
-      }))
-    : rhythmData;
+  // Up to 36 points rather than 8: the curve was flat because there was barely
+  // anything to draw, not because the session was steady.
+  // /api/metrics/rhythm, not metricHistory: every entry in the latter is the
+  // whole session re-aggregated, so consecutive points are identical and the
+  // line is flat by construction. This one scores a trailing window at each
+  // step, so it reflects when the work actually happened.
+  const rhythm = useMemo(() => {
+    const points = backend?.rhythm || [];
+    if (points.length < 2) {
+      return rhythmData.map((item) => ({ ...item, friction: null }));
+    }
+    return points.map((point) => ({
+      time: point.minutes_ago < 1 ? "Now" : `-${Math.round(point.minutes_ago)}`,
+      value: Math.round(point.focus * 100),
+      friction: Math.round(point.friction * 100),
+    }));
+  }, [backend?.rhythm]);
+
+  const focusRange = useMemo(() => {
+    const values = rhythm.map((point) => point.value).filter((value) => Number.isFinite(value));
+    if (!values.length) return { low: 0, high: 100, min: 0, max: 0 };
+    const min = Math.min(...values);
+    const max = Math.max(...values);
+    const pad = Math.max(2, (max - min) * 0.45);
+    return { low: Math.max(0, min - pad), high: Math.min(100, max + pad), min, max };
+  }, [rhythm]);
 
   useEffect(() => {
     if (!tracking) return undefined;
@@ -130,7 +165,7 @@ export function Overlay({ expanded, onExpandedChange, onOpenDashboard, onHide, b
     };
     return {
       title: "Your focus is stabilizing.",
-      body: "2Bᵐᵉ is comparing this live task with the configured bootstrap baseline.",
+      body: "2Bᵐᵉ is comparing this task against your recent sessions.",
     };
   }, [appSwitches, liveMetrics]);
 
@@ -348,14 +383,57 @@ export function Overlay({ expanded, onExpandedChange, onOpenDashboard, onHide, b
                 <span className="eyebrow">60-minute rhythm</span>
                 <strong>{activityTitle}</strong>
               </div>
-              <span className="session-meta"><Clock /> Local event stream</span>
+              <span className="session-meta">
+                <Clock /> {focusRange.min === focusRange.max
+                  ? `focus ${focusRange.min}`
+                  : `focus ${focusRange.min}–${focusRange.max}`}
+              </span>
             </div>
-            <div className="rhythm-chart" aria-label="Focus rhythm over the last 60 minutes">
+            <div className="rhythm-chart is-live" aria-label="Focus rhythm over the last 60 minutes">
               <ResponsiveContainer width="100%" height="100%">
-                <AreaChart data={rhythm} margin={{ top: 12, right: 3, left: 3, bottom: 0 }}>
+                <AreaChart data={rhythm} margin={{ top: 14, right: 6, left: 3, bottom: 0 }}>
+                  <defs>
+                    <linearGradient id="rhythmFocusFill" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor="#c7f36b" stopOpacity="0.52" />
+                      <stop offset="55%" stopColor="#c7f36b" stopOpacity="0.14" />
+                      <stop offset="100%" stopColor="#c7f36b" stopOpacity="0" />
+                    </linearGradient>
+                    <linearGradient id="rhythmFocusStroke" x1="0" y1="0" x2="1" y2="0">
+                      <stop offset="0%" stopColor="#7fbf4a" />
+                      <stop offset="60%" stopColor="#c7f36b" />
+                      <stop offset="100%" stopColor="#eaffb0" />
+                    </linearGradient>
+                    <filter id="rhythmGlow" x="-40%" y="-60%" width="180%" height="260%">
+                      <feGaussianBlur stdDeviation="3.2" result="blur" />
+                      <feMerge>
+                        <feMergeNode in="blur" />
+                        <feMergeNode in="SourceGraphic" />
+                      </feMerge>
+                    </filter>
+                  </defs>
                   <CartesianGrid vertical stroke="rgba(222,247,238,0.17)" horizontal={false} strokeDasharray="3 5" />
-                  <XAxis dataKey="time" axisLine={{ stroke: "rgba(222,247,238,0.22)" }} tickLine={false} tick={{ fill: "rgba(231,245,241,0.5)", fontSize: 10 }} interval={1} />
-                  <Area type="monotone" dataKey="value" stroke="#c7f36b" strokeWidth={3} fill="rgba(199,243,107,0.14)" dot={false} activeDot={{ r: 5, fill: "#102d2c", stroke: "#c7f36b", strokeWidth: 3 }} />
+                  <XAxis
+                    dataKey="time"
+                    axisLine={{ stroke: "rgba(222,247,238,0.22)" }}
+                    tickLine={false}
+                    tick={{ fill: "rgba(231,245,241,0.5)", fontSize: 10 }}
+                    interval={Math.max(0, Math.ceil(rhythm.length / 5) - 1)}
+                  />
+                  {/* Scaled to the actual spread; the heading prints the span. */}
+                  <YAxis hide domain={[focusRange.low, focusRange.high]} />
+                  <Area
+                    type="monotone"
+                    dataKey="value"
+                    stroke="url(#rhythmFocusStroke)"
+                    strokeWidth={3}
+                    fill="url(#rhythmFocusFill)"
+                    filter="url(#rhythmGlow)"
+                    dot={<NowDot pointCount={rhythm.length} />}
+                    activeDot={{ r: 5, fill: "#102d2c", stroke: "#c7f36b", strokeWidth: 3 }}
+                    isAnimationActive
+                    animationDuration={900}
+                    animationEasing="ease-out"
+                  />
                 </AreaChart>
               </ResponsiveContainer>
             </div>

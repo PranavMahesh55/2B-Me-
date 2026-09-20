@@ -87,59 +87,32 @@ input:focus-visible {
   pointer-events: none;
 }
 
-.prototype-stage {
+.app-stage {
   position: relative;
   z-index: 2;
 }
 
-.prototype-stage--overlay {
+.app-stage--overlay {
   width: 588px;
   padding-top: 22px;
 }
 
-.app--native .prototype-stage--overlay {
+.app--native .app-stage--overlay {
   width: 100%;
   padding: 12px 20px 16px;
 }
 
-.prototype-stage--dashboard {
+.app-stage--dashboard {
   width: min(1220px, calc(100vw - 32px));
   height: min(810px, calc(100vh - 32px));
   margin-top: 16px;
 }
 
-.app--native .prototype-stage--dashboard {
+.app--native .app-stage--dashboard {
   width: 100%;
   height: 100vh;
   margin: 0;
   padding: 10px;
-}
-
-.preview-caption {
-  position: fixed;
-  right: 24px;
-  bottom: 20px;
-  z-index: 3;
-  display: flex;
-  flex-direction: column;
-  gap: 3px;
-  padding: 10px 14px;
-  border: 1px solid rgba(34, 67, 64, 0.14);
-  border-radius: 12px;
-  background: rgba(255, 255, 255, 0.85);
-  box-shadow: 0 12px 38px rgba(26, 53, 50, 0.12);
-  backdrop-filter: blur(18px);
-}
-
-.preview-caption span {
-  font-size: 12px;
-  font-weight: 700;
-  color: #1a3b38;
-}
-
-.preview-caption small {
-  font-size: 10px;
-  color: #6a7a78;
 }
 
 .drag-region {
@@ -495,9 +468,40 @@ input:focus-visible {
 }
 
 .rhythm-chart {
+  position: relative;
   width: 100%;
-  height: 125px;
+  height: 146px;
   margin-top: 5px;
+}
+
+/* A slow sweep across the plot so the panel reads as live even when the
+   session is genuinely steady. It is an overlay on top of the chart and never
+   touches the plotted values. */
+.rhythm-chart.is-live::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  border-radius: 10px;
+  background: linear-gradient(
+    100deg,
+    transparent 36%,
+    rgba(199, 243, 107, 0.11) 50%,
+    transparent 64%
+  );
+  background-size: 240% 100%;
+  animation: rhythm-sweep 5.5s linear infinite;
+}
+
+@keyframes rhythm-sweep {
+  from { background-position: 150% 0; }
+  to { background-position: -50% 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .rhythm-chart.is-live::after {
+    animation: none;
+  }
 }
 
 .panel-actions {
@@ -1099,7 +1103,7 @@ input:focus-visible {
 .live-label,
 .confidence-chip,
 .priority-chip,
-.illustrative-label {
+.activity-label {
   display: inline-flex;
   align-items: center;
   gap: 6px;
@@ -2184,7 +2188,7 @@ input:focus-visible {
 }
 
 @media (max-width: 860px) {
-  .prototype-stage--dashboard {
+  .app-stage--dashboard {
     width: calc(100vw - 16px);
     height: calc(100vh - 16px);
     margin-top: 8px;
@@ -2231,7 +2235,7 @@ input:focus-visible {
     overflow: auto;
   }
 
-  .app--preview .prototype-stage--overlay {
+  .app--preview .app-stage--overlay {
     width: min(100vw, 588px);
     padding-inline: 8px;
   }
@@ -2263,10 +2267,6 @@ input:focus-visible {
 
   .app--preview .metric-line strong {
     font-size: 50px;
-  }
-
-  .preview-caption {
-    display: none;
   }
 
   .dashboard-header {

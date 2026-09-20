@@ -8,6 +8,9 @@ const initialState = {
   status: "STARTING",
   metrics: null,
   metricHistory: [],
+  // Windowed focus series for the rhythm chart. metricHistory cannot drive it:
+  // every entry there re-aggregates the whole session, so the line is flat.
+  rhythm: [],
   sessions: [],
   workflows: [],
   recommendations: [],
@@ -137,15 +140,19 @@ class BehaviorBackendClient {
     const historyQuery = this.state.sessionId
       ? `?limit=60&session_id=${encodeURIComponent(this.state.sessionId)}`
       : "?limit=60";
-    const [metrics, metricHistory, sessions, workflows, recommendations, privacy] = await Promise.all([
+    const rhythmQuery = this.state.sessionId
+      ? `?points=36&session_id=${encodeURIComponent(this.state.sessionId)}`
+      : "?points=36";
+    const [metrics, metricHistory, rhythm, sessions, workflows, recommendations, privacy] = await Promise.all([
       request(`/api/metrics/current${sessionQuery}`),
       request(`/api/metrics/history${historyQuery}`),
+      request(`/api/metrics/rhythm${rhythmQuery}`),
       request("/api/sessions?limit=30"),
       request("/api/workflows"),
       request("/api/recommendations"),
       request("/api/privacy"),
     ]);
-    this.update({ metrics, metricHistory, sessions, workflows, recommendations, privacy });
+    this.update({ metrics, metricHistory, rhythm: rhythm.points || [], sessions, workflows, recommendations, privacy });
   }
 
   openSocket() {
@@ -192,13 +199,17 @@ class BehaviorBackendClient {
       const historyQuery = this.state.sessionId
         ? `?limit=60&session_id=${encodeURIComponent(this.state.sessionId)}`
         : "?limit=60";
-      const [metricHistory, sessions, workflows, recommendations] = await Promise.all([
+      const rhythmQuery = this.state.sessionId
+        ? `?points=36&session_id=${encodeURIComponent(this.state.sessionId)}`
+        : "?points=36";
+      const [metricHistory, rhythm, sessions, workflows, recommendations] = await Promise.all([
         request(`/api/metrics/history${historyQuery}`),
+        request(`/api/metrics/rhythm${rhythmQuery}`),
         request("/api/sessions?limit=30"),
         request("/api/workflows"),
         request("/api/recommendations"),
       ]);
-      this.update({ metricHistory, sessions, workflows, recommendations });
+      this.update({ metricHistory, rhythm: rhythm.points || [], sessions, workflows, recommendations });
     } catch (error) {
       this.update({ lastError: error.message });
     }
