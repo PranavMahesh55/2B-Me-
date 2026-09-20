@@ -120,6 +120,17 @@ function WorkflowBuilder({ workflow, backend, onClose }) {
     ));
   }
 
+  // The overlay raises a consent card for the same plan, so the grant can be
+  // authorized from either surface. When it happens over there, this promise
+  // never resolves and the builder sits on "Permissions" indefinitely.
+  useEffect(() => {
+    const receipt = backend.lastReceipt;
+    if (!plan || !receipt || receipt.plan_id !== plan.id) return;
+    setResult(receipt);
+    setBusy(false);
+    setStage("test");
+  }, [backend.lastReceipt, plan]);
+
   async function runPreview() {
     if (!plan || approvedPermissions.length !== plan.required_permissions.length) return;
     setBusy(true);

@@ -34,7 +34,7 @@ function isSafeApplicationName(value: unknown): value is string {
     typeof value === "string" &&
     value.length > 0 &&
     value.length <= 64 &&
-    !/[/\\:\u0000-\u001f]/.test(value)
+    !/[/\\:"'\u0000-\u001f]/.test(value)
   );
 }
 
@@ -57,6 +57,19 @@ const previewOnly: ConnectorFn = async () => ({
  * card. execFile with an argument array runs no shell, so a name cannot become
  * a command.
  */
+/** LaunchServices, so it matches how `open -a` resolves the same name. */
+async function isRunning(application: string): Promise<boolean> {
+  try {
+    const { stdout } = await run("/usr/bin/osascript", [
+      "-e",
+      `application "${application}" is running`,
+    ]);
+    return stdout.trim() === "true";
+  } catch {
+    return false;
+  }
+}
+
 const openApplications: ConnectorFn = async (plan) => {
   const requested = (plan.params as Record<string, unknown>)?.applications;
   const applications = Array.isArray(requested) ? requested.filter(isSafeApplicationName) : [];
@@ -72,20 +85,33 @@ const openApplications: ConnectorFn = async (plan) => {
   if (!applications.length) throw new ConnectorFailed("no valid application names were bound");
 
   const opened: string[] = [];
+  const launched: string[] = [];
+  const raised: string[] = [];
   for (const application of applications) {
+    // Checked before opening: reproducing a workflow whose applications are
+    // already open looks like nothing happening at all, so the receipt has to
+    // distinguish the two or the user cannot tell it ran.
+    const wasRunning = await isRunning(application);
     try {
       await run("/usr/bin/open", ["-a", application]);
       opened.push(application);
+      (wasRunning ? raised : launched).push(application);
     } catch {
       // A missing application is not a reason to abandon the rest of the run.
     }
   }
   if (!opened.length) throw new ConnectorFailed("none of the bound applications could be opened");
+
+  const parts = [];
+  if (launched.length) parts.push(`launched ${launched.join(", ")}`);
+  if (raised.length) parts.push(`brought ${raised.join(", ")} forward`);
   return {
     mode: "reproduced",
     prepared: true,
     steps: opened,
-    message: `Reopened ${opened.join(" -> ")} in the observed order.`,
+    launched,
+    raised,
+    message: `Reproduced ${opened.length} steps: ${parts.join("; ")}.`,
   };
 };
 

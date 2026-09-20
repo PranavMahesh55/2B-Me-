@@ -32,6 +32,7 @@ test("bound application names are filtered to plausible names", async () => {
       "TextEdit",
       "/Applications/Evil.app",   // a path, not an application name
       "Mail; rm -rf ~",           // would only matter if a shell were involved
+      'Evil" is running) or (do shell script "id',  // AppleScript string break
       "Bad\u0000Name",            // control characters
       "x".repeat(200),            // absurd length
       42,
@@ -40,7 +41,10 @@ test("bound application names are filtered to plausible names", async () => {
     claims,
   );
 
-  // Paths, control characters, over-long strings and non-strings are dropped.
+  // Paths, quotes, control characters, over-long strings and non-strings are
+  // dropped. Quotes matter now that a name is interpolated into an AppleScript
+  // string for the is-running check.
+  //
   // The shell metacharacters survive, and that is fine: execFile takes an
   // argument array, so `open -a "Mail; rm -rf ~"` looks for an application with
   // that name and fails to find one. Nothing is ever handed to a shell.

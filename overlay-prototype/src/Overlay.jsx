@@ -575,7 +575,11 @@ export function Overlay({ expanded, onExpandedChange, onOpenDashboard, onHide, b
 
           {!pendingIntent && receipt?.audit_index !== undefined && (
             <div className="saved-note">
-              <Check weight="bold" /> Executed · audit #{receipt.audit_index} · {String(receipt.audit_hash).slice(0, 12)}…
+              <Check weight="bold" />
+              {/* Say what it did. "Executed - audit #3" is unreadable when the
+                  applications were already running, because bringing them
+                  forward looks like nothing happening at all. */}
+              {receipt.result?.message || "Executed"} · audit #{receipt.audit_index}
             </div>
           )}
 
