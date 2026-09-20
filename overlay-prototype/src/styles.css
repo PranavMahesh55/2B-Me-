@@ -2702,3 +2702,176 @@ input:focus-visible {
   line-height: 1.45;
   color: rgba(231, 245, 241, 0.82);
 }
+
+/* ---------------------------------------------------------------------------
+   Hosted browser preview only (VITE_HOSTED_PREVIEW=1).
+
+   Sits outside the app stage on purpose: the Halo Strip identity in AGENTS.md
+   belongs to the product, and this is scaffolding around a hosted copy of it.
+   --------------------------------------------------------------------------- */
+
+.preview-banner {
+  position: fixed;
+  left: 24px;
+  bottom: 24px;
+  z-index: 60;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 22px;
+  max-width: 880px;
+  padding: 18px 52px 18px 22px;
+  border-radius: 18px;
+  background: rgba(16, 45, 44, 0.97);
+  border: 1px solid rgba(199, 243, 107, 0.3);
+  box-shadow: 0 22px 48px rgba(5, 18, 17, 0.5);
+  backdrop-filter: blur(12px);
+}
+
+.preview-banner-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+.preview-eyebrow {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--lime);
+}
+
+.preview-banner-copy p {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: #c3d3cf;
+}
+
+.preview-banner-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.preview-primary,
+.preview-secondary {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 38px;
+  padding: 0 16px;
+  border: 0;
+  border-radius: 11px;
+  font-size: 13px;
+  font-weight: 600;
+  text-decoration: none;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.preview-primary {
+  background: var(--lime);
+  color: #10302e;
+}
+
+.preview-secondary {
+  background: rgba(245, 247, 246, 0.08);
+  color: #dbe7e3;
+}
+
+.preview-dismiss {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border: 0;
+  border-radius: 9px;
+  background: transparent;
+  color: #8fa5a1;
+  cursor: pointer;
+}
+
+.preview-dismiss:hover {
+  background: rgba(245, 247, 246, 0.08);
+}
+
+.preview-reopen {
+  position: fixed;
+  left: 24px;
+  bottom: 24px;
+  z-index: 60;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 38px;
+  padding: 0 15px;
+  border: 1px solid rgba(199, 243, 107, 0.28);
+  border-radius: 11px;
+  background: rgba(16, 45, 44, 0.95);
+  color: #c3d3cf;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.preview-film {
+  position: fixed;
+  inset: 0;
+  z-index: 70;
+  display: grid;
+  place-items: center;
+}
+
+.preview-film-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(5, 18, 17, 0.82);
+  backdrop-filter: blur(6px);
+}
+
+.preview-film-frame {
+  position: relative;
+  width: min(1180px, 92vw);
+  border-radius: 16px;
+  overflow: hidden;
+  box-shadow: 0 30px 80px rgba(5, 18, 17, 0.7);
+}
+
+.preview-film-frame video {
+  display: block;
+  width: 100%;
+  height: auto;
+  background: #0a1b1a;
+}
+
+.preview-film-close {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  z-index: 1;
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border: 0;
+  border-radius: 11px;
+  background: rgba(10, 27, 26, 0.75);
+  color: #f5f7f6;
+  cursor: pointer;
+}
+
+@media (max-width: 900px) {
+  .preview-banner {
+    left: 16px;
+    right: 16px;
+    bottom: 16px;
+    max-width: none;
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

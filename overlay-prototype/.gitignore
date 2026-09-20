@@ -17,3 +17,4 @@ broker/config/broker.config.json
 
 # collector build products
 collector/.build/
+dist-hosted

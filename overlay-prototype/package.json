@@ -20,7 +20,8 @@
     "broker:dev": "node broker/bin/serve.ts",
     "broker:test": "node --test \"broker/test/*.test.ts\"",
     "broker:verify-chain": "node broker/bin/verify-chain.ts",
-    "voice:design": "node scripts/design-voice.mjs"
+    "voice:design": "node scripts/design-voice.mjs",
+    "build:hosted": "vite build --outDir dist-hosted && node scripts/prepare-hosted-build.mjs"
   },
   "dependencies": {
     "@fontsource/inter": "^5.3.0",

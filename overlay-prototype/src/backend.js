@@ -1,7 +1,52 @@
 import { useEffect, useSyncExternalStore } from "react";
+import { DEMO_SNAPSHOT } from "./demoSnapshot.js";
 
 const API_BASE = "http://127.0.0.1:8765";
 const WS_BASE = "ws://127.0.0.1:8765/ws";
+
+/**
+ * The hosted browser build (VITE_HOSTED_PREVIEW=1) has no backend to reach:
+ * 127.0.0.1:8765 is the visitor's own machine, not ours. Rather than let every
+ * request fail and leave the interface reading "Backend reconnecting · 0:05",
+ * demo mode answers from a snapshot captured off the real API.
+ *
+ * It deliberately does NOT fake the one thing that matters. There is no demo
+ * branch for the signer: requestGrant() still throws signer_unavailable, so the
+ * consent card appears, is filled in with real bound parameters, and then tells
+ * the truth about why a web page cannot authorize it.
+ */
+export const DEMO_MODE = import.meta.env.VITE_HOSTED_PREVIEW === "1"
+  && new URLSearchParams(window.location.search).get("native") !== "1";
+
+function demoRespond(path, options = {}) {
+  const method = (options.method || "GET").toUpperCase();
+  const body = options.body ? JSON.parse(options.body) : {};
+  const S = DEMO_SNAPSHOT;
+
+  if (path.startsWith("/api/system/status")) return S.status;
+  if (path.startsWith("/api/sessions/active")) return S.session;
+  if (path.startsWith("/api/sessions/start")) return S.session;
+  if (path.startsWith("/api/sessions")) return S.sessions;
+  if (path.startsWith("/api/metrics/current")) return S.metrics;
+  if (path.startsWith("/api/metrics/history")) return S.metricHistory;
+  if (path.startsWith("/api/metrics/rhythm")) return S.rhythm;
+  if (path.startsWith("/api/workflows") && method === "GET") return S.workflows;
+  if (path.startsWith("/api/recommendations") && method === "GET") return S.recommendations;
+  if (path === "/api/privacy") return S.privacy;
+  if (path.startsWith("/api/privacy/")) return { key: path.split("/").pop(), enabled: body.enabled };
+  if (path.startsWith("/api/system/pause")) return { status: "PAUSED" };
+  if (path.startsWith("/api/system/resume")) return { status: "COLLECTING" };
+  if (path.startsWith("/api/events/batch")) return { accepted: (body.events || []).length };
+  if (path.startsWith("/api/assistant/ask")) return S.assistant;
+  if (path.startsWith("/api/voice/briefing")) return S.briefing;
+  if (path.endsWith("/plan")) return S.plan;
+  if (path.startsWith("/api/workflows")) return S.workflows[0];
+  if (path.includes("/feedback")) return { status: "recorded" };
+
+  // /execute is the deliberate gap: nothing reaches it, because requestGrant()
+  // fails first with signer_unavailable.
+  throw new GrantError("signer_unavailable", "A browser preview can't reach this Mac's signing key.");
+}
 
 const initialState = {
   connected: false,
@@ -34,6 +79,7 @@ export class GrantError extends Error {
 }
 
 async function request(path, options = {}) {
+  if (DEMO_MODE) return demoRespond(path, options);
   const response = await fetch(`${API_BASE}${path}`, {
     ...options,
     headers: { "Content-Type": "application/json", ...(options.headers || {}) },
@@ -122,6 +168,12 @@ class BehaviorBackendClient {
         });
       }
     } catch (error) {
+      // Demo mode never lands here, but if it somehow does, retrying a backend
+      // that does not exist just reconnects forever in front of a visitor.
+      if (DEMO_MODE) {
+        this.update({ connected: false, status: "PREVIEW", lastError: null });
+        return;
+      }
       this.update({ connected: false, status: "OFFLINE", lastError: error.message });
       this.started = false;
       window.clearTimeout(this.retryTimer);
@@ -156,6 +208,7 @@ class BehaviorBackendClient {
   }
 
   openSocket() {
+    if (DEMO_MODE) return;
     this.socket?.close();
     this.socket = new WebSocket(WS_BASE);
     this.socket.addEventListener("open", () => this.update({ connected: true, lastError: null }));
@@ -266,7 +319,14 @@ class BehaviorBackendClient {
   }
 
   async createAutomation(workflowId) {
-    return request(`/api/automation/${workflowId}/plan`, { method: "POST" });
+    const plan = await request(`/api/automation/${workflowId}/plan`, { method: "POST" });
+    // The backend broadcasts the same payload as `permission_request` over the
+    // WebSocket, and that broadcast is what normally sets pendingIntent. Demo
+    // mode has no socket, so deliver it here instead -- otherwise the consent
+    // card never arms and authorizing reports malformed_request ("nothing is
+    // awaiting authorization") rather than the honest signer_unavailable.
+    if (DEMO_MODE) this.update({ pendingIntent: plan, grantError: null, authorizing: false });
+    return plan;
   }
 
   /** Raises the Touch ID prompt through the Electron main process. */

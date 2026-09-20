@@ -33,6 +33,7 @@ import { grantCopy } from "./grantCopy.js";
 import { Brand } from "./Overlay.jsx";
 import { trackingSources } from "./data.js";
 import { useVoice } from "./voice.js";
+import { DEMO_MODE } from "./backend.js";
 
 const navigation = [
   ["Overview", SquaresFour],
@@ -247,7 +248,7 @@ function Header({ title, description, onBack, backend }) {
         </div>
       </div>
       <div className="header-actions no-drag">
-        <div className="tracking-chip"><span /> {backend.connected ? (backend.status === "PAUSED" ? "Tracking paused" : "Backend connected") : "Backend reconnecting"}</div>
+        <div className="tracking-chip"><span /> {DEMO_MODE ? "Illustrative preview" : backend.connected ? (backend.status === "PAUSED" ? "Tracking paused" : "Backend connected") : "Backend reconnecting"}</div>
         <button type="button" className="icon-button icon-button--light" aria-label="Search"><MagnifyingGlass /></button>
         <div className="avatar">PM</div>
       </div>
@@ -294,7 +295,7 @@ function Overview({ backend }) {
           </div>
           <div className="session-statline">
             <div><span>Duration</span><strong>{durationLabel(metrics?.duration_s)}</strong></div>
-            <div><span>Source</span><strong>{metrics?.data_origin === "live_observed" ? "Live local events" : "Awaiting events"}</strong></div>
+            <div><span>Source</span><strong>{metrics?.data_origin === "live_observed" ? "Live local events" : metrics?.data_origin === "illustrative_preview" ? "Illustrative preview" : "Awaiting events"}</strong></div>
             <div><span>Workflow</span><strong>{metrics?.workflow_type?.replaceAll("_", " ") || "Learning"}</strong></div>
             <div><span>State</span><strong className="positive-copy">{metrics?.behavior_label?.replaceAll("_", " ") || "Starting"}</strong></div>
           </div>

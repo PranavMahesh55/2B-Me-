@@ -2,9 +2,15 @@ import { useEffect, useState } from "react";
 import { CheckCircle } from "@phosphor-icons/react";
 import { Dashboard } from "./Dashboard.jsx";
 import { Overlay } from "./Overlay.jsx";
+import { PreviewBanner } from "./PreviewBanner.jsx";
 import { useBehaviorBackend } from "./backend.js";
 
 const isNative = new URLSearchParams(window.location.search).get("native") === "1";
+
+// Set only by `npm run build:hosted`. The desktop app and `npm run dev` never
+// see it, so the product picks up no scaffolding it does not need.
+const isHostedPreview = import.meta.env.VITE_HOSTED_PREVIEW === "1" && !isNative;
+const repoUrl = import.meta.env.VITE_REPO_URL || "";
 
 export function App() {
   const backend = useBehaviorBackend();
@@ -87,6 +93,7 @@ export function App() {
         )}
       </div>
       {notice && <div className="toast" role="status"><CheckCircle weight="fill" /> {notice}</div>}
+      {isHostedPreview && <PreviewBanner repoUrl={repoUrl} />}
     </div>
   );
 }
