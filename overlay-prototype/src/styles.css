@@ -483,14 +483,32 @@ input:focus-visible {
   inset: 0;
   pointer-events: none;
   border-radius: 10px;
+  /* Wide, low-contrast falloff: a narrow band reads as a hard-edged box
+     sliding across the panel rather than a sweep. */
   background: linear-gradient(
     100deg,
-    transparent 36%,
-    rgba(199, 243, 107, 0.11) 50%,
-    transparent 64%
+    transparent 0%,
+    rgba(199, 243, 107, 0.015) 30%,
+    rgba(199, 243, 107, 0.07) 50%,
+    rgba(199, 243, 107, 0.015) 70%,
+    transparent 100%
   );
-  background-size: 240% 100%;
+  background-size: 300% 100%;
   animation: rhythm-sweep 5.5s linear infinite;
+}
+
+.rhythm-scanner {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  overflow: visible;
+  z-index: 2;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .rhythm-scanner {
+    display: none;
+  }
 }
 
 @keyframes rhythm-sweep {

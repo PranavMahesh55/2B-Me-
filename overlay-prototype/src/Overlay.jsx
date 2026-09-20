@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   ArrowSquareOut,
   CaretUp,
@@ -48,6 +48,14 @@ function Brand({ compact = false }) {
     </div>
   );
 }
+
+const SCANNER_TRAIL = [
+  { begin: "0s", r: 3.6, opacity: 0.95 },
+  { begin: "-0.16s", r: 2.9, opacity: 0.5 },
+  { begin: "-0.32s", r: 2.3, opacity: 0.32 },
+  { begin: "-0.5s", r: 1.8, opacity: 0.2 },
+  { begin: "-0.7s", r: 1.3, opacity: 0.12 },
+];
 
 function NowDot({ cx, cy, index, pointCount }) {
   if (cx == null || cy == null || index !== pointCount - 1) return null;
@@ -101,12 +109,63 @@ export function Overlay({ expanded, onExpandedChange, onOpenDashboard, onHide, b
     if (points.length < 2) {
       return rhythmData.map((item) => ({ ...item, friction: null }));
     }
-    return points.map((point) => ({
-      time: point.minutes_ago < 1 ? "Now" : `-${Math.round(point.minutes_ago)}`,
-      value: Math.round(point.focus * 100),
-      friction: Math.round(point.friction * 100),
-    }));
+    return points.map((point, index) => {
+      // Only the newest point is "Now". Testing minutes_ago < 1 labelled every
+      // tick "Now" on a session younger than a minute.
+      const isLatest = index === points.length - 1;
+      const minutes = point.minutes_ago;
+      return {
+        time: isLatest
+          ? "Now"
+          : minutes >= 1
+            ? `-${Math.round(minutes)}m`
+            : `-${Math.max(1, Math.round(minutes * 60))}s`,
+        value: Math.round(point.focus * 100),
+        friction: Math.round(point.friction * 100),
+      };
+    });
   }, [backend?.rhythm]);
+
+  const chartRef = useRef(null);
+  const [track, setTrack] = useState(null);
+
+  // Recharts owns the scaling, so the scanner follows the path it actually
+  // drew. Re-read whenever the series changes or the panel resizes.
+  useEffect(() => {
+    const node = chartRef.current;
+    if (!node) return undefined;
+
+    const read = () => {
+      const curve = node.querySelector(".recharts-area-curve");
+      const surface = node.querySelector("svg.recharts-surface");
+      const d = curve?.getAttribute("d");
+      if (!d || !surface) return;
+      const width = surface.width?.baseVal?.value || node.clientWidth;
+      const height = surface.height?.baseVal?.value || node.clientHeight;
+      setTrack((current) => (current?.d === d && current?.width === width ? current : { d, width, height }));
+    };
+
+    // The area animates into place on data change; read after it settles.
+    const settle = window.setTimeout(read, 1000);
+    const frame = window.requestAnimationFrame(read);
+    const observer = new ResizeObserver(read);
+    observer.observe(node);
+    return () => {
+      window.clearTimeout(settle);
+      window.cancelAnimationFrame(frame);
+      observer.disconnect();
+    };
+  }, [rhythm]);
+
+  // Chosen explicitly so the newest point is always labelled. A numeric
+  // interval takes every Nth tick and can skip the final one, which leaves the
+  // axis ending on "-1s" instead of "Now".
+  const xTicks = useMemo(() => {
+    if (rhythm.length <= 5) return rhythm.map((point) => point.time);
+    const step = (rhythm.length - 1) / 4;
+    const picked = [0, 1, 2, 3, 4].map((slot) => rhythm[Math.round(slot * step)].time);
+    return [...new Set(picked)];
+  }, [rhythm]);
 
   const focusRange = useMemo(() => {
     const values = rhythm.map((point) => point.value).filter((value) => Number.isFinite(value));
@@ -389,7 +448,7 @@ export function Overlay({ expanded, onExpandedChange, onOpenDashboard, onHide, b
                   : `focus ${focusRange.min}–${focusRange.max}`}
               </span>
             </div>
-            <div className="rhythm-chart is-live" aria-label="Focus rhythm over the last 60 minutes">
+            <div className="rhythm-chart is-live" ref={chartRef} aria-label="Focus rhythm over the last 60 minutes">
               <ResponsiveContainer width="100%" height="100%">
                 <AreaChart data={rhythm} margin={{ top: 14, right: 6, left: 3, bottom: 0 }}>
                   <defs>
@@ -417,7 +476,8 @@ export function Overlay({ expanded, onExpandedChange, onOpenDashboard, onHide, b
                     axisLine={{ stroke: "rgba(222,247,238,0.22)" }}
                     tickLine={false}
                     tick={{ fill: "rgba(231,245,241,0.5)", fontSize: 10 }}
-                    interval={Math.max(0, Math.ceil(rhythm.length / 5) - 1)}
+                    ticks={xTicks}
+                    interval={0}
                   />
                   {/* Scaled to the actual spread; the heading prints the span. */}
                   <YAxis hide domain={[focusRange.low, focusRange.high]} />
@@ -436,6 +496,47 @@ export function Overlay({ expanded, onExpandedChange, onOpenDashboard, onHide, b
                   />
                 </AreaChart>
               </ResponsiveContainer>
+
+              {track && (
+                <svg
+                  className="rhythm-scanner"
+                  width={track.width}
+                  height={track.height}
+                  viewBox={`0 0 ${track.width} ${track.height}`}
+                  aria-hidden="true"
+                >
+                  <defs>
+                    <path id="rhythmTrack" d={track.d} fill="none" />
+                    <filter id="scannerGlow" x="-300%" y="-300%" width="700%" height="700%">
+                      <feGaussianBlur stdDeviation="2.4" result="blur" />
+                      <feMerge>
+                        <feMergeNode in="blur" />
+                        <feMergeNode in="SourceGraphic" />
+                      </feMerge>
+                    </filter>
+                  </defs>
+                  {SCANNER_TRAIL.map((ghost, index) => (
+                    <circle
+                      key={ghost.begin}
+                      r={ghost.r}
+                      fill="#eaffb0"
+                      opacity={ghost.opacity}
+                      filter={index === 0 ? "url(#scannerGlow)" : undefined}
+                    >
+                      <animateMotion
+                        dur="7s"
+                        begin={ghost.begin}
+                        repeatCount="indefinite"
+                        calcMode="linear"
+                        keyPoints="0;1"
+                        keyTimes="0;1"
+                      >
+                        <mpath href="#rhythmTrack" />
+                      </animateMotion>
+                    </circle>
+                  ))}
+                </svg>
+              )}
             </div>
           </div>
 
