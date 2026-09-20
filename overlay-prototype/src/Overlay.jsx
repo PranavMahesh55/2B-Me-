@@ -95,7 +95,21 @@ export function Overlay({ expanded, onExpandedChange, onOpenDashboard, onHide, b
   const receipt = backend?.lastReceipt || null;
 
   const liveMetrics = backend?.metrics?.has_live_data ? backend.metrics : null;
-  const focusScore = liveMetrics ? Math.round(liveMetrics.focus * 100) : 0;
+
+  // The headline number is "current session", so it has to mean current.
+  // backend.metrics.focus re-aggregates the whole session, which after half an
+  // hour barely moves however hard you are working -- typing for a minute
+  // cannot shift a thirty-minute average. The newest windowed point is the same
+  // scorer over a trailing window, so it responds.
+  const latestWindow = backend?.rhythm?.length ? backend.rhythm[backend.rhythm.length - 1] : null;
+  const focusScore = latestWindow
+    ? Math.round(latestWindow.focus * 100)
+    : liveMetrics
+      ? Math.round(liveMetrics.focus * 100)
+      : 0;
+  const keysPerMin = Number(
+    latestWindow?.keystrokes_per_min ?? liveMetrics?.evidence?.keystrokes_per_min ?? 0,
+  );
   const activityTitle = liveMetrics?.session_title || "Waiting for observed activity";
   const appSwitches = Number(liveMetrics?.evidence?.app_switches_per_min || 0);
   // Up to 36 points rather than 8: the curve was flat because there was barely
@@ -417,7 +431,10 @@ export function Overlay({ expanded, onExpandedChange, onOpenDashboard, onHide, b
                 <strong>{focusScore}</strong>
                 <span>/100</span>
               </div>
-              <div className="metric-badge"><Gauge weight="fill" /> Steady momentum</div>
+              <div className="metric-badge">
+                <Gauge weight="fill" />
+                {focusScore >= 75 ? "Strong momentum" : focusScore >= 55 ? "Steady momentum" : "Fragmented"}
+              </div>
             </div>
             <div className="insight-block">
               <div className="insight-label"><Sparkle weight="fill" /> Contextual insight</div>
@@ -432,7 +449,7 @@ export function Overlay({ expanded, onExpandedChange, onOpenDashboard, onHide, b
           {evidenceOpen && (
             <div className="evidence-strip">
               <Check weight="bold" />
-              <span>{appSwitches.toFixed(1)} app switches/min · {Math.round((liveMetrics?.confidence || 0) * 100)}% model confidence · {liveMetrics?.model_version || "waiting for model"}</span>
+              <span>{keysPerMin.toFixed(0)} keystrokes/min · {appSwitches.toFixed(1)} app switches/min · {Math.round((liveMetrics?.confidence || 0) * 100)}% model confidence</span>
             </div>
           )}
 

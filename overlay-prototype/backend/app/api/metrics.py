@@ -156,6 +156,9 @@ def rhythm_series(
                 "focus": round(score["focus"], 4),
                 "friction": round(score["friction"], 4),
                 "confidence": round(score["confidence"], 4),
+                # Windowed too, so the evidence strip does not pair a live focus
+                # score with a whole-session typing average.
+                "keystrokes_per_min": round(float(features.get("keystrokes_per_min", 0.0)), 1),
                 "events": len(bucket),
             }
         )

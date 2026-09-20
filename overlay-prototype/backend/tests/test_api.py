@@ -396,3 +396,70 @@ def test_rhythm_is_windowed_where_history_is_cumulative():
         # Each point is a measurement over several events, not one transition.
         assert min(point["events"] for point in rhythm["points"]) >= 2
         assert rhythm["points"][0]["minutes_ago"] > rhythm["points"][-1]["minutes_ago"]
+
+
+def test_windowed_focus_responds_to_typing_where_the_session_score_cannot():
+    """"Current session" has to mean current.
+
+    backend.metrics.focus re-aggregates the whole session, so after half an hour
+    it barely moves however hard the user is working -- typing for a minute
+    cannot shift a thirty-minute average, which is why the overlay's headline
+    number looked frozen. The windowed series is the same scorer over a trailing
+    window, so it tracks what is happening now.
+    """
+    from datetime import UTC, datetime, timedelta
+
+    with TestClient(app) as client:
+        session = client.post(
+            "/api/sessions/start",
+            json={"title": "t", "workflow_type": "coding_debugging", "device_id": "device_burst"},
+        ).json()
+
+        start = datetime.now(UTC) - timedelta(minutes=30)
+        events = []
+        index = 0
+        for minute in range(30):
+            at = (start + timedelta(minutes=minute)).isoformat()
+            events.append({
+                "event_id": f"evt_burst_{index:04d}", "timestamp": at,
+                "session_id": session["id"], "task_id": session["task_id"],
+                "device_id": "device_burst", "application": ["VS Code", "Chrome"][minute % 2],
+                "window_context": "w", "event_type": "application_transition", "action": "focus",
+                "duration_ms": 60000, "metadata": {}, "data_origin": "live_observed",
+            })
+            index += 1
+            # Twenty quiet minutes, then ten of heavy typing. Application
+            # behaviour is identical throughout.
+            if minute >= 20:
+                events.append({
+                    "event_id": f"evt_burst_{index:04d}", "timestamp": at,
+                    "session_id": session["id"], "task_id": session["task_id"],
+                    "device_id": "device_burst", "application": "VS Code",
+                    "window_context": "w", "event_type": "keyboard_activity", "action": "input_burst",
+                    "duration_ms": 60000, "metadata": {"keys": 160, "clicks": 2},
+                    "data_origin": "live_observed",
+                })
+                index += 1
+        for offset in range(0, len(events), 100):
+            client.post("/api/events/batch", json={"events": events[offset : offset + 100]})
+
+        points = client.get(
+            "/api/metrics/rhythm", params={"session_id": session["id"], "points": 12}
+        ).json()["points"]
+        assert len(points) >= 8
+
+        quiet = [p for p in points if p["keystrokes_per_min"] == 0]
+        typing = [p for p in points if p["keystrokes_per_min"] > 100]
+        assert quiet and typing, "the fixture must contain both stretches"
+
+        best_quiet = max(p["focus"] for p in quiet)
+        best_typing = max(p["focus"] for p in typing)
+        assert best_typing > best_quiet, (
+            f"typing must raise windowed focus: {best_typing} vs {best_quiet}"
+        )
+
+        # And the reason the headline looked frozen: one number for the lot.
+        whole_session = client.get(
+            "/api/metrics/current", params={"session_id": session["id"]}
+        ).json()["focus"]
+        assert min(p["focus"] for p in points) <= whole_session <= max(p["focus"] for p in points)
