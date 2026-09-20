@@ -65,6 +65,16 @@ export const OPERATIONS = {
     permission: "draft_email",
     description: "Draft a response for review",
   },
+  /**
+   * Sends the clipboard off this device, so it is its own operation with its
+   * own permission rather than a variant of open_application. The content is
+   * bound by hash, so the broker refuses if the clipboard changed after consent.
+   */
+  summarize_clipboard: {
+    connector: "chatgpt",
+    permission: "share_clipboard",
+    description: "Summarize the copied section",
+  },
 } as const;
 
 export type Operation = keyof typeof OPERATIONS;

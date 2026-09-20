@@ -38,6 +38,7 @@ const OPERATION_LABEL = {
   open_application: "open an application",
   prepare_context: "prepare workflow context",
   draft_response: "draft a response",
+  summarize_clipboard: "send the copied section to ChatGPT",
 };
 
 
@@ -284,10 +285,22 @@ export function Overlay({ expanded, onExpandedChange, onOpenDashboard, onHide, b
           <div><dt>Bound details</dt><dd>{paramKeys.length ? paramKeys.join(", ") : "none"}</dd></div>
         </dl>
 
+        {/* This operation sends the copied section off the device, so the card
+            has to show the section rather than just name the parameter. */}
+        {intent.params?.excerpt && (
+          <div className="intent-excerpt">
+            <span className="eyebrow">
+              Leaves this Mac · {intent.params.characters} characters
+            </span>
+            <blockquote>“{intent.params.excerpt}…”</blockquote>
+          </div>
+        )}
+
         <p className="intent-footnote">
           <ShieldCheck weight="fill" aria-hidden="true" />
-          Signed on this Mac by the Secure Enclave. Only these details are authorized — anything
-          added afterwards is refused.
+          {intent.params?.excerpt
+            ? "Signed on this Mac by the Secure Enclave. This exact text is bound to the authorization — if you copy something else before it runs, it is refused."
+            : "Signed on this Mac by the Secure Enclave. Only these details are authorized — anything added afterwards is refused."}
         </p>
 
         {copy && (

@@ -26,7 +26,10 @@ try {
 }
 
 const config = await loadConfig(raw);
-configureConnectors({ desktopActions: config.desktopActions });
+configureConnectors({
+  desktopActions: config.desktopActions,
+  contentActions: config.contentActions,
+});
 mkdirSync(dirname(config.auditDbPath), { recursive: true });
 
 const database = new DatabaseSync(config.auditDbPath);
@@ -49,3 +52,6 @@ console.error(`[broker] issuer ${config.expectedIssuer}`);
 console.error(`[broker] ${warmed} unexpired jti warmed; chain head ${head ? "#" + head.index : "(empty)"}`);
 console.error(`[broker] origins ${config.allowedOrigins.join(", ")}`);
 console.error(`[broker] desktop actions ${config.desktopActions ? "ENABLED" : "disabled (preview only)"}`);
+console.error(
+  `[broker] content actions ${config.contentActions ? "ENABLED - the clipboard can leave this device" : "disabled"}`,
+);

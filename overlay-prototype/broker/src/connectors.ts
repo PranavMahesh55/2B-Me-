@@ -9,7 +9,7 @@
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 
-import { isRegisteredPair } from "./contract.ts";
+import { base64url, isRegisteredPair, sha256 } from "./contract.ts";
 import type { GrantClaims, Plan } from "./contract.ts";
 
 const run = promisify(execFile);
@@ -24,8 +24,18 @@ const run = promisify(execFile);
  */
 let desktopActionsEnabled = false;
 
-export function configureConnectors({ desktopActions }: { desktopActions: boolean }): void {
+/**
+ * Separate from desktopActions on purpose. Opening an application changes
+ * nothing outside this machine; sending the clipboard to a website is egress of
+ * personal content, and the two should not share one switch.
+ */
+let contentActionsEnabled = false;
+
+export function configureConnectors(
+  { desktopActions, contentActions }: { desktopActions: boolean; contentActions?: boolean },
+): void {
   desktopActionsEnabled = desktopActions;
+  contentActionsEnabled = contentActions ?? false;
 }
 
 /** `open -a` takes an application name, not a path or a shell fragment. */
@@ -146,7 +156,77 @@ const draftResponse: ConnectorFn = async (plan) => {
   };
 };
 
+/**
+ * Reproduces the "copy a section, ask for a summary" step.
+ *
+ * The section is whatever is on the clipboard. It is bound into the grant by
+ * SHA-256 at plan time, so this re-reads the clipboard and refuses if it no
+ * longer matches: consenting to summarize one passage must not authorize
+ * sending whatever you happened to copy afterwards.
+ *
+ * The composed text is also placed on the clipboard, so the step still works by
+ * hand if the prefilled prompt does not survive the deep link.
+ */
+const summarizeClipboard: ConnectorFn = async (plan) => {
+  const params = (plan.params ?? {}) as Record<string, unknown>;
+  const prompt = typeof params.prompt === "string" ? params.prompt : "Summarize this.";
+  const boundDigest = typeof params.content_sha256 === "string" ? params.content_sha256 : "";
+
+  let clipboard = "";
+  try {
+    const { stdout } = await run("/usr/bin/pbpaste", []);
+    clipboard = stdout;
+  } catch {
+    throw new ConnectorFailed("could not read the clipboard");
+  }
+  if (!clipboard.trim()) throw new ConnectorFailed("the clipboard is empty");
+
+  const digest = base64url(await sha256(new TextEncoder().encode(clipboard)));
+  if (boundDigest && digest !== boundDigest) {
+    // Not param_mismatch: the plan is intact, the world moved underneath it.
+    throw new ConnectorFailed("the clipboard changed after you authorized this");
+  }
+
+  if (!contentActionsEnabled) {
+    return {
+      mode: "preview_only",
+      prepared: true,
+      sent: false,
+      characters: clipboard.length,
+      message: `Prepared a ${clipboard.length}-character summary request. Content actions are disabled, so nothing left this device.`,
+    };
+  }
+
+  const composed = `${prompt}\n\n${clipboard}`;
+  try {
+    // pbcopy reads stdin, so the promisified execFile is no use here.
+    await new Promise<void>((resolve, reject) => {
+      const child = execFile("/usr/bin/pbcopy", [], (error) => (error ? reject(error) : resolve()));
+      child.stdin?.end(composed);
+    });
+  } catch {
+    throw new ConnectorFailed("could not stage the summary request on the clipboard");
+  }
+
+  // ChatGPT.app claims https, so this opens in the app rather than a browser.
+  const url = `https://chatgpt.com/?q=${encodeURIComponent(composed.slice(0, 1800))}`;
+  try {
+    await run("/usr/bin/open", ["-a", "ChatGPT", url]);
+  } catch {
+    throw new ConnectorFailed("could not open ChatGPT");
+  }
+
+  return {
+    mode: "summarized",
+    prepared: true,
+    sent: true,
+    characters: clipboard.length,
+    message: `Sent a ${clipboard.length}-character section to ChatGPT with your prompt. It is also on the clipboard.`,
+  };
+};
+
 export const REGISTRY = new Map<string, ConnectorFn>([
+  ["chatgpt:summarize_clipboard", summarizeClipboard],
   ["mail:draft_response", draftResponse],
   ["workflow:prepare_context", previewOnly],
   ["desktop:open_application", openApplications],

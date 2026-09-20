@@ -22,6 +22,11 @@ export interface BrokerConfig {
   debugCanonical: boolean;
   /** Opt-in: lets connectors actually launch applications. */
   desktopActions: boolean;
+  /**
+   * Opt-in, and deliberately a separate switch. Opening an application changes
+   * nothing beyond this machine; handing the clipboard to a website does.
+   */
+  contentActions: boolean;
 }
 
 export interface RawConfig {
@@ -36,6 +41,7 @@ export interface RawConfig {
   audit_db_path?: string;
   debug_canonical?: boolean;
   desktop_actions?: boolean;
+  content_actions?: boolean;
 }
 
 export async function loadConfig(raw: RawConfig): Promise<BrokerConfig> {
@@ -73,6 +79,7 @@ export async function loadConfig(raw: RawConfig): Promise<BrokerConfig> {
     auditDbPath: raw.audit_db_path ?? "./data/audit.db",
     debugCanonical: raw.debug_canonical ?? false,
     desktopActions: raw.desktop_actions ?? false,
+    contentActions: raw.content_actions ?? false,
   };
 }
 

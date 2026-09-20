@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import base64
+import hashlib
 from time import perf_counter
 
 from sqlalchemy import desc, select
@@ -15,7 +17,12 @@ from backend.app.db.models import (
 
 
 ALLOWED_ACTIONS = {"open_application", "prepare_context", "draft_response"}
-ALLOWED_PERMISSIONS = {"open_application", "read_active_window", "draft_email"}
+ALLOWED_PERMISSIONS = {
+    "open_application",
+    "read_active_window",
+    "draft_email",
+    "share_clipboard",
+}
 
 # Mirrors OPERATIONS in packages/grant/types.ts. §7 step 7 checks the
 # (connector, operation) pair, so these two tables have to agree.
@@ -23,7 +30,28 @@ CONNECTOR_BY_OPERATION = {
     "open_application": "desktop",
     "prepare_context": "workflow",
     "draft_response": "mail",
+    "summarize_clipboard": "chatgpt",
 }
+
+SUMMARY_PROMPT = "Summarize this section in five bullet points, then list any claims that need checking."
+
+
+def _clipboard() -> str:
+    """The copied section.
+
+    Read here, at plan time, only so the consent card can show what would be
+    sent and the grant can bind its hash. The content itself is never stored:
+    the behavioural event store rejects content by design, and only the digest
+    and a short excerpt travel with the plan.
+    """
+    import subprocess
+
+    try:
+        return subprocess.run(
+            ["/usr/bin/pbpaste"], capture_output=True, text=True, timeout=2
+        ).stdout
+    except (OSError, subprocess.SubprocessError):
+        return ""
 
 # AutomationPlan.safety_level is this prototype's version of the spec's risk.
 RISK_BY_SAFETY_LEVEL = {1: "low", 2: "medium", 3: "high"}
@@ -46,10 +74,38 @@ def plan_intent(plan: AutomationPlan) -> dict:
         if action.get("type") == "open_application" and action.get("application")
     ]
 
-    # Reproducing the observed steps means reopening those applications in
-    # order, so that is the operation, and the ordered list is a bound param.
-    # §7 step 8 then holds the broker to exactly the list shown on the consent
-    # card: adding an application afterwards is param_mismatch.
+    # When the observed workflow runs through ChatGPT and a section is already
+    # copied, the step worth reproducing is the content one, not the window
+    # shuffling. The digest binds that exact section into the grant, so the
+    # broker refuses if the clipboard changed between consent and execution --
+    # agreeing to summarize one passage must not authorize sending the next
+    # thing you copy.
+    copied = _clipboard()
+    uses_chatgpt = any("chatgpt" in str(name).lower() for name in applications)
+    if uses_chatgpt and copied.strip():
+        digest = base64.urlsafe_b64encode(
+            hashlib.sha256(copied.encode("utf-8")).digest()
+        ).decode("ascii").rstrip("=")
+        excerpt = " ".join(copied.split())[:110]
+        return {
+            "connector": "chatgpt",
+            "operation": "summarize_clipboard",
+            "resource": f"workflow:{plan.workflow_id}",
+            "params": {
+                "prompt": SUMMARY_PROMPT,
+                "content_sha256": digest,
+                "characters": len(copied),
+                # Shown on the consent card. Sending content off the device
+                # without showing what is being sent would be the whole problem.
+                "excerpt": excerpt,
+                "applications": applications,
+            },
+        }
+
+    # Otherwise, reproducing the observed steps means reopening those
+    # applications in order, so that is the operation, and the ordered list is a
+    # bound param. §7 step 8 then holds the broker to exactly the list shown on
+    # the consent card: adding an application afterwards is param_mismatch.
     if applications:
         return {
             "connector": "desktop",

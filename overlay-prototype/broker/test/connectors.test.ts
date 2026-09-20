@@ -74,3 +74,25 @@ test("the registry and the contract agree on every pair", () => {
   assert.equal(isRegistered("desktop", "wire_transfer"), false);
   assert.equal(isRegistered("mail", "open_application"), false);
 });
+
+test("summarize_clipboard is registered and off by default", async () => {
+  configureConnectors({ desktopActions: true, contentActions: false });
+  assert.equal(isRegistered("chatgpt", "summarize_clipboard"), true);
+  // The contract and the registry must agree, or a plan could pass §7 step 7
+  // and then find nothing to run.
+  assert.equal(isRegistered("desktop", "summarize_clipboard"), false);
+
+  // desktopActions is true above and contentActions is false, so enabling
+  // application launching must not also enable content leaving the device.
+  const result = await execute(
+    {
+      connector: "chatgpt",
+      operation: "summarize_clipboard",
+      resource: "workflow:wf_test",
+      params: { prompt: "Summarize this.", content_sha256: "" },
+    } as unknown as Plan,
+    claims,
+  );
+  assert.equal(result.mode, "preview_only");
+  assert.equal(result.sent, false);
+});

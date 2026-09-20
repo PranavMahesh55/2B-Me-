@@ -2563,3 +2563,23 @@ input:focus-visible {
   opacity: 0.6;
   cursor: not-allowed;
 }
+
+/* The copied section on the consent card. It leaves the device, so it is shown
+   in full-ish rather than named as a parameter. */
+.intent-excerpt {
+  border-left: 2px solid var(--orange);
+  padding: 2px 0 2px 12px;
+  display: grid;
+  gap: 4px;
+}
+
+.intent-excerpt .eyebrow {
+  color: var(--orange);
+}
+
+.intent-excerpt blockquote {
+  margin: 0;
+  font-size: 12.5px;
+  line-height: 1.45;
+  color: rgba(231, 245, 241, 0.82);
+}
